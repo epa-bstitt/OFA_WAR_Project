@@ -1,0 +1,82 @@
+# generated: 2026-02-19
+# last_updated: 2026-02-19
+# project: EPABusinessPlatform
+# project_key: epabp
+# tracking_system: yaml
+# story_location: stories
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-19
+project: EPABusinessPlatform
+project_key: epabp
+tracking_system: yaml
+story_location: stories
+
+development_status:
+  # Epic 1: Foundation & Authentication
+  epic-1: in-progress
+  1-1-project-initialization: done
+  1-2-epa-max-authentication: done
+  1-3-core-layout-navigation: done
+  epic-1-retrospective: optional
+  
+  # Epic 2: WAR Submission Flow
+  epic-2: in-progress
+  2-1-war-submission-form: done
+  2-2-ai-terse-conversion: done
+  2-3-submission-confirmation: done
+  epic-2-retrospective: optional
+  
+  # Epic 3: Review Workflow (Aggregator)
+  epic-3: in-progress
+  3-1-review-dashboard: done
+  3-2-side-by-side-review: done
+  3-3-prompt-template-management: done
+  epic-3-retrospective: optional
+  
+  # Epic 4: Approval Workflow (Program Overseer)
+  epic-4: in-progress
+  4-1-approval-dashboard: done
+  4-2-batch-approval: done
+  4-3-onenote-publication: done
+  epic-4-retrospective: optional
+  
+  # Epic 5: Microsoft Teams Integration
+  epic-5: in-progress
+  5-1-teams-bot-setup: done
+  5-2-teams-notifications: done
+  epic-5-retrospective: optional
+  
+  # Epic 6: Compliance & Audit
+  epic-6: done
+  6-1-audit-logging: done
+  6-2-system-administration: done
+  epic-6-retrospective: optional
