@@ -5,6 +5,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
+<<<<<<< HEAD
 // ---
 // To switch between local JSON and production PostgreSQL:
 // 1. For local testing, use the datasource below (provider = "json")
@@ -25,6 +26,41 @@ datasource db {
 // }
 
 
+=======
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  CONTRIBUTOR
+  AGGREGATOR
+  PROGRAM_OVERSEER
+  ADMINISTRATOR
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+}
+
+enum WorkflowStage {
+  SUBMISSION
+  REVIEW
+  APPROVAL
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
 
 // User model - synced with Azure AD
 model User {
@@ -32,7 +68,11 @@ model User {
   email         String    @unique
   name          String?
   azureAdId     String    @unique
+<<<<<<< HEAD
   role          String   @default("CONTRIBUTOR")
+=======
+  role          Role      @default(CONTRIBUTOR)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -46,7 +86,10 @@ model User {
   teamsNotificationsEnabled  Boolean  @default(true)
   teamsConversationId      String?
   teamsConversationReference String?
+<<<<<<< HEAD
   notifications Notification[]
+=======
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   
   @@map("users")
 }
@@ -61,7 +104,11 @@ model Submission {
   rawText           String
   terseVersion      String?
   aiConfidence      Float?
+<<<<<<< HEAD
   status            String          @default("SUBMITTED")
+=======
+  status            SubmissionStatus @default(SUBMITTED)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   isAiGenerated     Boolean          @default(true)
   editedBy          String?
   publishedAt       DateTime?
@@ -108,7 +155,11 @@ model Review {
 model WorkflowState {
   id                String        @id @default(cuid())
   submissionId      String        @unique
+<<<<<<< HEAD
   currentStage      String        @default("SUBMISSION")
+=======
+  currentStage      WorkflowStage @default(SUBMISSION)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   assignedTo        String?
   dueDate           DateTime?
   notes             String?
@@ -142,15 +193,24 @@ model AuditLog {
   userId            String?
   resourceType      String
   resourceId        String?
+<<<<<<< HEAD
   metadata          String?
+=======
+  metadata          Json?
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   ipAddress         String?
   userAgent         String?
   createdAt         DateTime @default(now())
   
   // Relations
   user              User?    @relation(fields: [userId], references: [id])
+<<<<<<< HEAD
   submission        Submission? @relation(fields: [resourceId], references: [id])
   review            Review?   @relation(fields: [resourceId], references: [id])
+=======
+  submission        Submission? @relation(fields: [resourceId], references: [id], map: "audit_submission")
+  review            Review?   @relation(fields: [resourceId], references: [id], map: "audit_review")
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   
   @@index([userId])
   @@index([createdAt])
@@ -166,7 +226,11 @@ model Notification {
   title             String
   message           String
   isRead            Boolean   @default(false)
+<<<<<<< HEAD
   metadata          String?
+=======
+  metadata          Json?
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   createdAt         DateTime  @default(now())
   
   // Relations
@@ -183,7 +247,11 @@ model ConversationState {
   conversationId    String   @unique
   userId            String
   lastMessage       String?
+<<<<<<< HEAD
   context           String?
+=======
+  context           Json?
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   updatedAt         DateTime @updatedAt
   
   @@index([conversationId])
@@ -196,7 +264,11 @@ model Project {
   id                String           @id @default(cuid())
   name              String
   description       String?
+<<<<<<< HEAD
   status            String    @default("ACTIVE")
+=======
+  status            ProjectStatus    @default(ACTIVE)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   createdBy         String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
