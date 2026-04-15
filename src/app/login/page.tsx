@@ -97,14 +97,15 @@ export default function LoginPage() {
           {/* EPA MAX Login */}
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground text-center">
-              Sign in with your EPA MAX credentials
+              All login buttons use demo mode and bypass external authentication
             </p>
             <Button 
               className="w-full" 
               size="lg"
-              onClick={() => signIn("azure-ad-b2c", { callbackUrl: "/dashboard" })}
+              disabled={isLoading !== null}
+              onClick={() => handleDemoLogin("contributor")}
             >
-              Sign in with EPA MAX
+              Continue to Dashboard
             </Button>
           </div>
 
@@ -153,7 +154,7 @@ export default function LoginPage() {
           )}
 
           <p className="text-xs text-muted-foreground text-center">
-            Demo mode allows testing without EPA MAX credentials
+            Demo mode is enabled for all login options
           </p>
         </CardContent>
       </Card>

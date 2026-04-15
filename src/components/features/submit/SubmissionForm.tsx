@@ -247,7 +247,7 @@ export function SubmissionForm() {
                     Submitting...
                   </>
                 ) : (
-                  "Submit BAR"
+                  "Submit"
                 )}
               </Button>
               <Button
