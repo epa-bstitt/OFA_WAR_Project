@@ -1,0 +1,12 @@
+---
+applications:
+  - name: ofa-war-project
+    memory: 512M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    command: npm run start
+    env:
+      NODE_ENV: production
+    routes:
+      - route: ofa-war-project.app.cloud.gov
