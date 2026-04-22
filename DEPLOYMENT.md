@@ -10,7 +10,6 @@ This guide covers the deployment process for the EPA Business Platform.
 - PostgreSQL 14.x or higher
 - npm 9.x or higher
 - Git
-Jake
 
 ### Required Accounts & Services
 
@@ -230,63 +229,227 @@ git clone <repository-url> /var/www/epa-platform
    }
    ```
 
-### Option 4: cloud.gov (Cloud Foundry)
+## Database Migrations
 
-#### Prerequisites
-- Cloud Foundry CLI (cf8.exe)
-- cloud.gov account and org/space access
-- manifest.yml in project root (see below)
-
-#### 1. Prepare manifest.yml
-A sample manifest.yml is provided in the project root. Edit the `route` to match your cloud.gov subdomain:
-
-```yaml
----
-applications:
-  - name: ofa-war-project
-    memory: 512M
-    instances: 1
-    buildpacks:
-      - nodejs_buildpack
-    command: npm run start
-    env:
-      NODE_ENV: production
-    routes:
-      - route: ofa-war-project.YOUR-SUBDOMAIN-HERE.app.cloud.gov
-```
-
-#### 2. Build and Deploy
+### Initial Setup
 
 ```bash
-# Install dependencies and build
-npm install
-npx prisma generate
-npm run build
+# Run migrations
+npx prisma migrate deploy
 
-# Log in to cloud.gov
-cf login -a https://api.fr.cloud.gov --sso
-
-# Target your org and space
-cf target -o YOUR_ORG -s YOUR_SPACE
-
-# Deploy
-cf push
+# Seed initial data (if applicable)
+npx prisma db seed
 ```
 
-#### 3. Troubleshooting
-- If you see `Failed due to Can not find manifest file!`, ensure `manifest.yml` is in the project root.
-- Check buildpack logs with `cf logs ofa-war-project --recent` for errors.
-- Make sure all environment variables are set in the manifest or via `cf set-env`.
+### Subsequent Deployments
 
-#### 4. Environment Variables
-- You can set sensitive variables with `cf set-env ofa-war-project VAR_NAME value` and restage:
-  ```bash
-  cf set-env ofa-war-project NEXTAUTH_SECRET your-secret
-  cf restage ofa-war-project
-  ```
+```bash
+# Check migration status
+npx prisma migrate status
 
-#### 5. Database
-- Use a managed PostgreSQL service (AWS RDS, Azure, etc.) and set `DATABASE_URL` accordingly.
-- cloud.gov supports service bindings for databases if provisioned through the marketplace.
+# Deploy pending migrations
+npx prisma migrate deploy
+```
+
+## Post-Deployment Checklist
+
+### Verification Steps
+
+1. **Application Health**
+   - [ ] Homepage loads without errors
+   - [ ] Login page accessible
+   - [ ] Authentication working
+   - [ ] Database connection stable
+
+2. **Feature Verification**
+   - [ ] WAR submission form works
+   - [ ] AI conversion functional
+   - [ ] Review workflow accessible
+   - [ ] Approval dashboard loads
+   - [ ] Admin panel accessible (for admins)
+
+3. **Integration Tests**
+   - [ ] Teams bot responding (if enabled)
+   - [ ] OneNote publishing works
+   - [ ] Email notifications sending
+
+4. **Security Checks**
+   - [ ] HTTPS enforced
+   - [ ] Security headers present
+   - [ ] Environment variables secured
+   - [ ] Database connections encrypted
+
+### Monitoring Setup
+
+1. **Application Monitoring**
+   - Install APM tool (Datadog, New Relic, etc.)
+   - Configure error tracking (Sentry)
+   - Set up log aggregation
+
+2. **Database Monitoring**
+   - Enable query performance monitoring
+   - Set up connection pool monitoring
+   - Configure backup alerts
+
+3. **Uptime Monitoring**
+   - Set up health check endpoints
+   - Configure uptime alerts
+   - Establish SLA monitoring
+
+## Rollback Procedure
+
+If deployment fails:
+
+1. **Immediate Rollback**
+   ```bash
+   # Using PM2
+   pm2 stop epa-platform
+   pm2 start epa-platform-old
+
+   # Using Docker
+   docker stop epa-platform-new
+   docker start epa-platform-old
+   ```
+
+2. **Database Rollback**
+   ```bash
+   # If migrations failed
+   npx prisma migrate resolve --rolled-back <migration-name>
+
+   # Restore from backup (if needed)
+   pg_restore --clean --if-exists --dbname=epabusinessplatform backup.sql
+   ```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Build Failures
+
+```bash
+# Clear Next.js cache
+rm -rf .next
+
+# Rebuild
+npm run build
+```
+
+#### Database Connection Issues
+
+```bash
+# Test connection
+npx prisma db pull
+
+# Check connection string format
+# Should be: postgresql://user:pass@host:port/db?schema=public
+```
+
+#### Authentication Issues
+
+- Verify `NEXTAUTH_SECRET` is set
+- Check `NEXTAUTH_URL` matches deployment URL
+- Ensure Azure AD B2C redirect URLs configured
+
+#### Memory Issues
+
+```bash
+# Increase Node.js memory limit
+export NODE_OPTIONS="--max-old-space-size=4096"
+npm run build
+```
+
+## Performance Optimization
+
+### Database
+
+1. **Enable Connection Pooling**
+   ```env
+   DATABASE_URL="postgresql://user:pass@host:port/db?connection_limit=20&pool_timeout=30"
+   ```
+
+2. **Add Indexes** (if needed)
+   ```sql
+   CREATE INDEX CONCURRENTLY idx_submissions_status ON submissions(status);
+   ```
+
+### Application
+
+1. **Enable CDN for static assets**
+2. **Configure caching headers**
+3. **Use Next.js Image optimization**
+4. **Enable gzip compression**
+
+## Security Hardening
+
+### Network Security
+
+1. **Firewall Rules**
+   - Allow only HTTPS (443)
+   - Restrict database access to app servers
+   - Block unused ports
+
+2. **DDoS Protection**
+   - Enable Cloudflare or AWS Shield
+   - Configure rate limiting
+
+### Application Security
+
+1. **Security Headers**
+   ```javascript
+   // next.config.js
+   async headers() {
+     return [
+       {
+         source: '/:path*',
+         headers: [
+           { key: 'X-DNS-Prefetch-Control', value: 'on' },
+           { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
+           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+           { key: 'X-Content-Type-Options', value: 'nosniff' },
+         ],
+       },
+     ];
+   }
+   ```
+
+2. **Content Security Policy**
+   - Define strict CSP headers
+   - Whitelist allowed domains
+
+3. **Regular Updates**
+   - Keep dependencies updated
+   - Apply security patches promptly
+   - Monitor vulnerability databases
+
+## Maintenance
+
+### Regular Tasks
+
+- **Daily**: Check error logs, monitor performance
+- **Weekly**: Review security alerts, update dependencies
+- **Monthly**: Database optimization, backup verification
+- **Quarterly**: Security audit, penetration testing
+
+### Backup Strategy
+
+1. **Database Backups**
+   - Automated daily backups
+   - Point-in-time recovery enabled
+   - Cross-region replication
+
+2. **Application Backups**
+   - Source code in version control
+   - Environment variables documented
+   - Infrastructure as code (Terraform/CloudFormation)
+
+## Support Contacts
+
+- **Technical Issues**: Development team
+- **Infrastructure**: DevOps team
+- **Security**: Security team
+- **Business Users**: EPA help desk
 
 ---
+
+**Last Updated**: February 2026
+**Version**: 1.0

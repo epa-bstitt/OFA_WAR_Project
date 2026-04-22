@@ -1,8 +1,3 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -10,6 +5,34 @@ generator client {
   provider = "prisma-client-js"
 }
 
+<<<<<<< HEAD
+// ---
+// To switch between local JSON and production PostgreSQL:
+// 1. For local testing, use the datasource below (provider = "json")
+// 2. For production, comment this out and uncomment the PostgreSQL datasource
+// 3. You can automate this with an environment variable in your deployment pipeline or admin UI.
+//
+
+// --- LOCAL TESTING (SQLite, default) ---
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL") // e.g., file:./dev-db.sqlite
+}
+
+// --- PRODUCTION (PostgreSQL) ---
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+
+=======
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
 enum Role {
   CONTRIBUTOR
   AGGREGATOR
@@ -37,27 +60,41 @@ enum ProjectStatus {
   COMPLETED
   CANCELLED
 }
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
 
+// User model - synced with Azure AD
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String?
   azureAdId     String    @unique
+<<<<<<< HEAD
+  role          String   @default("CONTRIBUTOR")
+=======
   role          Role      @default(CONTRIBUTOR)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  
+  // Relations
   submissions   Submission[]
   reviews       Review[]
   auditLogs     AuditLog[]
   projectAssignments ProjectAssignment[]
+  // Teams notification fields
   teamsNotificationsEnabled  Boolean  @default(true)
   teamsConversationId      String?
   teamsConversationReference String?
+<<<<<<< HEAD
   notifications Notification[]
+=======
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
+  
   @@map("users")
 }
 
+// Weekly Activity Report Submission
 model Submission {
   id                String           @id @default(cuid())
   userId            String
@@ -67,19 +104,26 @@ model Submission {
   rawText           String
   terseVersion      String?
   aiConfidence      Float?
+<<<<<<< HEAD
+  status            String          @default("SUBMITTED")
+=======
   status            SubmissionStatus @default(SUBMITTED)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   isAiGenerated     Boolean          @default(true)
   editedBy          String?
   publishedAt       DateTime?
   oneNotePageId     String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+  
+  // Relations
   user              User             @relation(fields: [userId], references: [id])
   project           Project?         @relation(fields: [projectId], references: [id])
   component         ProjectComponent? @relation(fields: [componentId], references: [id])
   reviews           Review[]
   workflowState     WorkflowState?
   auditLogs         AuditLog[]
+  
   @@index([userId])
   @@index([projectId])
   @@index([componentId])
@@ -88,6 +132,7 @@ model Submission {
   @@map("submissions")
 }
 
+// Review records (Jake's edits)
 model Review {
   id                String   @id @default(cuid())
   submissionId      String
@@ -96,25 +141,37 @@ model Review {
   editedText        String
   editReason        String?
   createdAt         DateTime @default(now())
+  
+  // Relations
   submission        Submission @relation(fields: [submissionId], references: [id])
   reviewer          User       @relation(fields: [reviewerId], references: [id])
   auditLogs         AuditLog[]
+  
   @@index([submissionId])
   @@map("reviews")
 }
 
+// Workflow state tracking
 model WorkflowState {
   id                String        @id @default(cuid())
   submissionId      String        @unique
+<<<<<<< HEAD
+  currentStage      String        @default("SUBMISSION")
+=======
   currentStage      WorkflowStage @default(SUBMISSION)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   assignedTo        String?
   dueDate           DateTime?
   notes             String?
   updatedAt         DateTime      @updatedAt
+  
+  // Relations
   submission        Submission    @relation(fields: [submissionId], references: [id])
+  
   @@map("workflow_states")
 }
 
+// AI Prompt Templates (Jake can customize)
 model PromptTemplate {
   id                String   @id @default(cuid())
   name              String   @unique
@@ -124,29 +181,44 @@ model PromptTemplate {
   createdBy         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  
   @@index([isActive])
   @@map("prompt_templates")
 }
 
+// Audit Log for compliance
 model AuditLog {
   id                String   @id @default(cuid())
   action            String
   userId            String?
   resourceType      String
   resourceId        String?
+<<<<<<< HEAD
+  metadata          String?
+=======
   metadata          Json?
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   ipAddress         String?
   userAgent         String?
   createdAt         DateTime @default(now())
+  
+  // Relations
   user              User?    @relation(fields: [userId], references: [id])
+<<<<<<< HEAD
+  submission        Submission? @relation(fields: [resourceId], references: [id])
+  review            Review?   @relation(fields: [resourceId], references: [id])
+=======
   submission        Submission? @relation(fields: [resourceId], references: [id], map: "audit_submission")
   review            Review?   @relation(fields: [resourceId], references: [id], map: "audit_review")
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
+  
   @@index([userId])
   @@index([createdAt])
   @@index([action])
   @@map("audit_logs")
 }
 
+// Notifications
 model Notification {
   id                String    @id @default(cuid())
   userId            String
@@ -154,41 +226,63 @@ model Notification {
   title             String
   message           String
   isRead            Boolean   @default(false)
+<<<<<<< HEAD
+  metadata          String?
+=======
   metadata          Json?
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   createdAt         DateTime  @default(now())
+  
+  // Relations
   user              User      @relation(fields: [userId], references: [id])
+  
   @@index([userId])
   @@index([isRead])
   @@map("notifications")
 }
 
+// Teams Bot Conversation State
 model ConversationState {
   id                String   @id @default(cuid())
   conversationId    String   @unique
   userId            String
   lastMessage       String?
+<<<<<<< HEAD
+  context           String?
+=======
   context           Json?
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   updatedAt         DateTime @updatedAt
+  
   @@index([conversationId])
   @@index([userId])
   @@map("conversation_states")
 }
 
+// Project management for multi-contributor reports
 model Project {
   id                String           @id @default(cuid())
   name              String
   description       String?
+<<<<<<< HEAD
+  status            String    @default("ACTIVE")
+=======
   status            ProjectStatus    @default(ACTIVE)
+>>>>>>> e7f2c381447db6ba0e6c418378799502ddd95657
   createdBy         String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+  
+  // Relations
   components        ProjectComponent[]
   assignments       ProjectAssignment[]
   submissions       Submission[]
+  
   @@index([status])
   @@map("projects")
 }
 
+// Project components (e.g., "Backend API", "Frontend UI" within a project)
 model ProjectComponent {
   id                String           @id @default(cuid())
   projectId         String
@@ -196,13 +290,17 @@ model ProjectComponent {
   description       String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+  
+  // Relations
   project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   submissions       Submission[]
   assignments       ProjectAssignment[]
+  
   @@index([projectId])
   @@map("project_components")
 }
 
+// Many-to-many relationship between Users and Projects/Components
 model ProjectAssignment {
   id                String           @id @default(cuid())
   userId            String
@@ -210,9 +308,12 @@ model ProjectAssignment {
   componentId       String?
   assignedBy        String?
   assignedAt        DateTime         @default(now())
+  
+  // Relations
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   component         ProjectComponent? @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  
   @@unique([userId, projectId, componentId])
   @@index([userId])
   @@index([projectId])
