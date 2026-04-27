@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +32,7 @@ import {
 import { CardGrid } from "@/components/shared/CardGrid";
 import type { ActiveContractDetails, MockContract } from "@/lib/mock-contracts";
 import { cn } from "@/lib/utils";
+import { CardWalkthrough, CardWalkthroughStep } from "./CardWalkthrough";
 
 interface ContractUpdateCardsProps {
   contracts: MockContract[];
@@ -113,6 +114,8 @@ const cardThemes: Record<string, { shell: string; panel: string; badge: string }
   },
 };
 
+const WALKTHROUGH_DISMISSED_KEY = "war-submit-card-walkthrough-dismissed";
+
 export function ContractUpdateCards({
   contracts,
   enhancedEditorEnabled = true,
@@ -138,6 +141,7 @@ export function ContractUpdateCards({
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(initialDrafts);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [isEnhancedModeEnabled, setIsEnhancedModeEnabled] = useState(enhancedEditorEnabled);
+  const [isWalkthroughOpen, setIsWalkthroughOpen] = useState(false);
   const [selectedActiveContractId, setSelectedActiveContractId] = useState<string | null>(null);
   const [activeContracts, setActiveContracts] = useState<ActiveContractState>(
     Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract]))
@@ -148,6 +152,71 @@ export function ContractUpdateCards({
   const selectedActiveContract = selectedActiveContractId
     ? activeContracts[selectedActiveContractId]
     : null;
+
+  const firstContractId = contracts[0]?.id ?? null;
+
+  const walkthroughSteps = useMemo<CardWalkthroughStep[]>(() => {
+    if (!firstContractId) {
+      return [];
+    }
+
+    return [
+      {
+        id: "card-overview",
+        selector: "[data-tour='submit-card-shell']",
+        title: "Start with the first project card",
+        description:
+          "Each card is a separate project update. Use this first card as the pattern, then repeat for any other projects that need changes this week.",
+      },
+      {
+        id: "previous-week",
+        selector: "[data-tour='submit-card-previous-week']",
+        title: "Review prior context quickly",
+        description:
+          "The previous-week section gives fast context so you can see what changed before drafting this week's update.",
+      },
+      {
+        id: "current-update",
+        selector: "[data-tour='submit-card-current-update']",
+        title: "Enter the current update",
+        description:
+          "Use Simple mode for a concise single entry, or Detailed mode for status, owner, due dates, and carry-forward line items.",
+      },
+      {
+        id: "submit-actions",
+        selector: "[data-tour='submit-card-actions']",
+        title: "Submit this project when ready",
+        description:
+          "Use Submit to lock this card's draft for the week. You can still reopen it later by selecting Edit.",
+      },
+    ];
+  }, [firstContractId]);
+
+  useEffect(() => {
+    if (!firstContractId) {
+      return;
+    }
+
+    const dismissed = window.localStorage.getItem(WALKTHROUGH_DISMISSED_KEY) === "true";
+
+    if (dismissed) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsWalkthroughOpen(true);
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [firstContractId]);
+
+  function handleWalkthroughClose(rememberDismissal: boolean) {
+    setIsWalkthroughOpen(false);
+
+    if (rememberDismissal) {
+      window.localStorage.setItem(WALKTHROUGH_DISMISSED_KEY, "true");
+    }
+  }
 
   function patchLineItem(
     contractId: string,
@@ -598,7 +667,8 @@ export function ContractUpdateCards({
       </div>
 
       <CardGrid columns={2} gap="lg">
-        {contracts.map((contract) => {
+        {contracts.map((contract, index) => {
+          const isFirstCard = index === 0;
           const draft = drafts[contract.id] ?? {
             submissionMode: "SIMPLE",
             simpleText: "",
@@ -621,6 +691,7 @@ export function ContractUpdateCards({
           return (
             <Card
               key={contract.id}
+              data-tour={isFirstCard ? "submit-card-shell" : undefined}
               className={cn(
                 "cursor-pointer border-2 transition-transform duration-200 hover:-translate-y-1 hover:shadow-2xl",
                 theme.shell,
@@ -666,6 +737,7 @@ export function ContractUpdateCards({
                     type="button"
                     variant="ghost"
                     className="shrink-0"
+                    data-tour={isFirstCard ? "submit-card-history-button" : undefined}
                     onClick={(event) => {
                       event.stopPropagation();
                       setSelectedContractId(contract.id);
@@ -676,7 +748,10 @@ export function ContractUpdateCards({
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className={cn("space-y-2 rounded-xl border p-4", theme.panel)}>
+                <div
+                  className={cn("space-y-2 rounded-xl border p-4", theme.panel)}
+                  data-tour={isFirstCard ? "submit-card-previous-week" : undefined}
+                >
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                     Previous Week Submission
                   </p>
@@ -686,6 +761,7 @@ export function ContractUpdateCards({
 
                 <div
                   className="space-y-2"
+                  data-tour={isFirstCard ? "submit-card-current-update" : undefined}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -732,6 +808,7 @@ export function ContractUpdateCards({
 
                 <div
                   className="flex flex-wrap items-center justify-between gap-3"
+                  data-tour={isFirstCard ? "submit-card-actions" : undefined}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="flex flex-wrap items-center gap-2">
@@ -829,6 +906,12 @@ export function ContractUpdateCards({
           </DialogContent>
         )}
       </Dialog>
+
+      <CardWalkthrough
+        steps={walkthroughSteps}
+        open={isWalkthroughOpen}
+        onClose={handleWalkthroughClose}
+      />
 
       <Dialog
         open={Boolean(selectedActiveContractId)}
