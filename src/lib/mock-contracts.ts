@@ -217,7 +217,13 @@ const mockContractsByUser: Record<string, MockContract[]> = {
 };
 
 export function getMockContractsForUser(userId: string): MockContract[] {
-  return mockContractsByUser[userId] ?? mockContractsByUser["demo-admin"];
+  const contracts = mockContractsByUser[userId];
+
+  if (contracts && contracts.length > 0) {
+    return contracts;
+  }
+
+  return mockContractsByUser["demo-admin"];
 }
 
 export function getMockContractById(contractId: string): MockContract | undefined {
