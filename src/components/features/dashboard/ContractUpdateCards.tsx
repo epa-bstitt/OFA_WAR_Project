@@ -29,15 +29,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CardGrid } from "@/components/shared/CardGrid";
 import type { ActiveContractDetails, MockContract } from "@/lib/mock-contracts";
 import { cn } from "@/lib/utils";
+import { CircleHelp } from "lucide-react";
 import { CardWalkthrough, CardWalkthroughStep } from "./CardWalkthrough";
 
 interface ContractUpdateCardsProps {
   contracts: MockContract[];
   enhancedEditorEnabled?: boolean;
 }
+
+type WalkthroughVariant = "simple" | "advanced";
 
 type LineItemStatus = "NORMAL" | "RISK" | "CRITICAL";
 type LineItemCategory = "GENERAL" | "FUNDING" | "ACTION" | "RISK" | "DECISION" | "MEETING";
@@ -64,6 +73,34 @@ interface DraftState {
 }
 
 type ActiveContractState = Record<string, ActiveContractDetails>;
+
+interface FieldHintLabelProps {
+  label: string;
+  hint: string;
+  dataTour?: string;
+}
+
+function FieldHintLabel({ label, hint, dataTour }: FieldHintLabelProps) {
+  return (
+    <div className="mb-1 flex items-center gap-1.5" data-tour={dataTour}>
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`More information about ${label}`}
+            className="rounded-full text-slate-400 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-[280px] bg-slate-900 px-3 py-2 text-slate-100">
+          <p className="text-xs leading-5">{hint}</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
 
 const statusStyles: Record<LineItemStatus, string> = {
   NORMAL: "bg-slate-100 text-slate-700 border-slate-200",
@@ -141,7 +178,7 @@ export function ContractUpdateCards({
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(initialDrafts);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [isEnhancedModeEnabled, setIsEnhancedModeEnabled] = useState(enhancedEditorEnabled);
-  const [isWalkthroughOpen, setIsWalkthroughOpen] = useState(false);
+  const [walkthroughVariant, setWalkthroughVariant] = useState<WalkthroughVariant | null>(null);
   const [selectedActiveContractId, setSelectedActiveContractId] = useState<string | null>(null);
   const [activeContracts, setActiveContracts] = useState<ActiveContractState>(
     Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract]))
@@ -155,7 +192,9 @@ export function ContractUpdateCards({
 
   const firstContractId = contracts[0]?.id ?? null;
 
-  const walkthroughSteps = useMemo<CardWalkthroughStep[]>(() => {
+  const isWalkthroughOpen = walkthroughVariant !== null;
+
+  const simpleWalkthroughSteps = useMemo<CardWalkthroughStep[]>(() => {
     if (!firstContractId) {
       return [];
     }
@@ -176,21 +215,111 @@ export function ContractUpdateCards({
           "The previous-week section gives fast context so you can see what changed before drafting this week's update.",
       },
       {
-        id: "current-update",
-        selector: "[data-tour='submit-card-current-update']",
-        title: "Enter the current update",
+        id: "simple-status",
+        selector: "[data-tour='submit-card-simple-status']",
+        title: "Set update severity",
         description:
-          "Use Simple mode for a concise single entry, or Detailed mode for status, owner, due dates, and carry-forward line items.",
+          "Choose NORMAL, RISK, or CRITICAL to signal urgency and review priority for this week\'s update.",
       },
       {
-        id: "submit-actions",
-        selector: "[data-tour='submit-card-actions']",
+        id: "simple-text",
+        selector: "[data-tour='submit-card-simple-text']",
+        title: "Write the weekly narrative",
+        description:
+          "Capture what changed this week in plain language: progress, blockers, and what leadership needs to know.",
+      },
+      {
+        id: "no-update",
+        selector: "[data-tour='submit-card-no-update-button']",
+        title: "Use No Update when appropriate",
+        description:
+          "Select No Update only when nothing changed this week. It auto-fills a standard response and keeps reporting consistent.",
+      },
+      {
+        id: "submit-button",
+        selector: "[data-tour='submit-card-submit-button']",
         title: "Submit this project when ready",
         description:
           "Use Submit to lock this card's draft for the week. You can still reopen it later by selecting Edit.",
       },
     ];
   }, [firstContractId]);
+
+  const advancedWalkthroughSteps = useMemo<CardWalkthroughStep[]>(() => {
+    if (!firstContractId) {
+      return [];
+    }
+
+    return [
+      {
+        id: "advanced-tabs",
+        selector: "[data-tour='submit-card-mode-tabs']",
+        title: "Switch to Detailed mode",
+        description:
+          "Detailed mode is designed for structured updates with categories and richer tracking fields.",
+      },
+      {
+        id: "advanced-status",
+        selector: "[data-tour='submit-card-detailed-status']",
+        title: "Set line-item status",
+        description:
+          "Each detailed entry gets a status. Use CRITICAL for urgent blockers, RISK for emerging concerns, and NORMAL for stable progress.",
+      },
+      {
+        id: "advanced-owner",
+        selector: "[data-tour='submit-card-detailed-owner']",
+        title: "Assign an owner",
+        description:
+          "Owner identifies who is accountable for follow-up. Use a person or team name so reviewers know who to contact.",
+      },
+      {
+        id: "advanced-due-date",
+        selector: "[data-tour='submit-card-detailed-due-date']",
+        title: "Set a due date",
+        description:
+          "Use due date for commitments and expected completion timing. Leave blank only when a date is genuinely unknown.",
+      },
+      {
+        id: "advanced-action-required",
+        selector: "[data-tour='submit-card-detailed-action-required']",
+        title: "Flag action-required items",
+        description:
+          "Check Action required when leadership or another team needs to do something to move this item forward.",
+      },
+      {
+        id: "advanced-line-carry-forward",
+        selector: "[data-tour='submit-card-detailed-line-carry-forward']",
+        title: "Mark ongoing items",
+        description:
+          "Check Carry forward for items that remain active into the next reporting cycle.",
+      },
+      {
+        id: "advanced-text",
+        selector: "[data-tour='submit-card-detailed-text']",
+        title: "Document detailed update text",
+        description:
+          "Write specifics: what happened, impact, and next step. This text is what reviewers use for decisions and approvals.",
+      },
+      {
+        id: "advanced-carry-forward",
+        selector: "[data-tour='submit-card-carry-forward']",
+        title: "Carry forward prior week text",
+        description:
+          "Use carry-forward when previous notes are still active so you can refine instead of retyping recurring updates.",
+      },
+      {
+        id: "advanced-submit",
+        selector: "[data-tour='submit-card-submit-button']",
+        title: "Submit the detailed draft",
+        description:
+          "When your detailed items are complete, submit this card. You can still reopen it later by selecting Edit.",
+      },
+    ];
+  }, [firstContractId]);
+
+  const activeWalkthroughSteps = walkthroughVariant === "advanced"
+    ? advancedWalkthroughSteps
+    : simpleWalkthroughSteps;
 
   useEffect(() => {
     if (!firstContractId) {
@@ -204,18 +333,41 @@ export function ContractUpdateCards({
     }
 
     const timeoutId = window.setTimeout(() => {
-      setIsWalkthroughOpen(true);
+      setWalkthroughVariant("simple");
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
   }, [firstContractId]);
 
   function handleWalkthroughClose(rememberDismissal: boolean) {
-    setIsWalkthroughOpen(false);
+    setWalkthroughVariant(null);
 
     if (rememberDismissal) {
       window.localStorage.setItem(WALKTHROUGH_DISMISSED_KEY, "true");
     }
+  }
+
+  function setSubmissionMode(contractId: string, mode: "SIMPLE" | "DETAILED") {
+    patchSimpleDraft(contractId, { submissionMode: mode });
+  }
+
+  function launchSimpleWalkthrough() {
+    if (!firstContractId) {
+      return;
+    }
+
+    setSubmissionMode(firstContractId, "SIMPLE");
+    setWalkthroughVariant("simple");
+  }
+
+  function launchAdvancedWalkthrough() {
+    if (!firstContractId) {
+      return;
+    }
+
+    setIsEnhancedModeEnabled(true);
+    setSubmissionMode(firstContractId, "DETAILED");
+    setWalkthroughVariant("advanced");
   }
 
   function patchLineItem(
@@ -392,7 +544,7 @@ export function ContractUpdateCards({
     }));
   }
 
-  function renderBasicLineItems(contract: MockContract, draft: DraftState) {
+  function renderBasicLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
     return (
       <div className="space-y-3">
         {draft.lineItems.map((lineItem, index) => (
@@ -411,6 +563,11 @@ export function ContractUpdateCards({
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-[140px]">
+                  <FieldHintLabel
+                    label="Status"
+                    hint="Pick the overall severity of this update: NORMAL for stable progress, RISK for concerns, CRITICAL for urgent issues."
+                    dataTour={isFirstCard && index === 0 ? "submit-card-basic-status" : undefined}
+                  />
                   <Select
                     disabled={draft.submitted}
                     value={lineItem.status}
@@ -439,6 +596,11 @@ export function ContractUpdateCards({
                 </Button>
               </div>
             </div>
+            <FieldHintLabel
+              label="Line Item Details"
+              hint="Summarize weekly progress, blockers, and planned next steps for this line item."
+              dataTour={isFirstCard && index === 0 ? "submit-card-basic-text" : undefined}
+            />
             <Textarea
               value={lineItem.text}
               placeholder={index === 0 ? contract.currentUpdatePlaceholder : "Add another line item."}
@@ -462,7 +624,7 @@ export function ContractUpdateCards({
     );
   }
 
-  function renderSimpleSubmission(contract: MockContract, draft: DraftState) {
+  function renderSimpleSubmission(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -473,6 +635,11 @@ export function ContractUpdateCards({
             </p>
           </div>
           <div className="w-[150px]">
+            <FieldHintLabel
+              label="Status"
+              hint="Choose severity for the entire weekly narrative: NORMAL for on-track work, RISK for caution, CRITICAL for urgent attention."
+              dataTour={isFirstCard ? "submit-card-simple-status" : undefined}
+            />
             <Select
               disabled={draft.submitted}
               value={draft.simpleStatus}
@@ -498,6 +665,12 @@ export function ContractUpdateCards({
           </span>
         </div>
 
+        <FieldHintLabel
+          label="Weekly Update Text"
+          hint="Write one concise narrative that covers progress, blockers, and what comes next for this contract this week."
+          dataTour={isFirstCard ? "submit-card-simple-text" : undefined}
+        />
+
         <Textarea
           value={draft.simpleText}
           placeholder={`Example: ${contract.currentUpdatePlaceholder}`}
@@ -510,9 +683,9 @@ export function ContractUpdateCards({
     );
   }
 
-  function renderEnhancedLineItems(contract: MockContract, draft: DraftState) {
+  function renderEnhancedLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" data-tour={isFirstCard ? "submit-card-detailed-section" : undefined}>
         {categoryOptions.map((category) => {
           const items = draft.lineItems.filter((lineItem) => lineItem.category === category.value);
 
@@ -527,6 +700,7 @@ export function ContractUpdateCards({
                   type="button"
                   variant="outline"
                   size="sm"
+                  data-tour={isFirstCard && category.value === "GENERAL" ? "submit-card-detailed-add-item" : undefined}
                   disabled={draft.submitted || draft.noUpdate}
                   onClick={() => addLineItem(contract.id, category.value)}
                 >
@@ -540,7 +714,10 @@ export function ContractUpdateCards({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {items.map((lineItem, index) => (
+                  {items.map((lineItem, index) => {
+                    const isFirstDetailedItem = isFirstCard && category.value === "GENERAL" && index === 0;
+
+                    return (
                     <div key={lineItem.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -564,7 +741,11 @@ export function ContractUpdateCards({
 
                       <div className="mb-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <div>
-                          <p className="mb-1 text-xs font-medium text-slate-500">Status</p>
+                          <FieldHintLabel
+                            label="Status"
+                            hint="Classify the risk level for this specific line item so reviewers can triage quickly."
+                            dataTour={isFirstDetailedItem ? "submit-card-detailed-status" : undefined}
+                          />
                           <Select
                             disabled={draft.submitted}
                             value={lineItem.status}
@@ -583,7 +764,11 @@ export function ContractUpdateCards({
                           </Select>
                         </div>
                         <div>
-                          <p className="mb-1 text-xs font-medium text-slate-500">Owner</p>
+                          <FieldHintLabel
+                            label="Owner"
+                            hint="Enter the accountable person or team responsible for resolving or advancing this item."
+                            dataTour={isFirstDetailedItem ? "submit-card-detailed-owner" : undefined}
+                          />
                           <Input
                             value={lineItem.owner}
                             disabled={draft.submitted}
@@ -593,7 +778,11 @@ export function ContractUpdateCards({
                           />
                         </div>
                         <div>
-                          <p className="mb-1 text-xs font-medium text-slate-500">Due Date</p>
+                          <FieldHintLabel
+                            label="Due Date"
+                            hint="Set the expected completion date for this item to help track schedule risk and deadlines."
+                            dataTour={isFirstDetailedItem ? "submit-card-detailed-due-date" : undefined}
+                          />
                           <Input
                             type="date"
                             value={lineItem.dueDate}
@@ -603,7 +792,10 @@ export function ContractUpdateCards({
                           />
                         </div>
                         <div className="flex flex-col justify-end gap-2">
-                          <label className="flex items-center gap-2 text-xs text-slate-600">
+                          <div
+                            className="flex items-center gap-2 text-xs text-slate-600"
+                            data-tour={isFirstDetailedItem ? "submit-card-detailed-action-required" : undefined}
+                          >
                             <Checkbox
                               checked={lineItem.actionRequired}
                               disabled={draft.submitted}
@@ -611,9 +803,28 @@ export function ContractUpdateCards({
                                 patchLineItem(contract.id, lineItem.id, { actionRequired: checked === true })
                               }
                             />
-                            Action required
-                          </label>
-                          <label className="flex items-center gap-2 text-xs text-slate-600">
+                            <span>Action required</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="More information about Action required"
+                                  className="rounded-full text-slate-400 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                                >
+                                  <CircleHelp className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[280px] bg-slate-900 px-3 py-2 text-slate-100">
+                                <p className="text-xs leading-5">
+                                  Check this when leadership or another team must take action for this item.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <div
+                            className="flex items-center gap-2 text-xs text-slate-600"
+                            data-tour={isFirstDetailedItem ? "submit-card-detailed-line-carry-forward" : undefined}
+                          >
                             <Checkbox
                               checked={lineItem.carryForward}
                               disabled={draft.submitted}
@@ -621,10 +832,32 @@ export function ContractUpdateCards({
                                 patchLineItem(contract.id, lineItem.id, { carryForward: checked === true })
                               }
                             />
-                            Carry forward
-                          </label>
+                            <span>Carry forward</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="More information about Carry forward"
+                                  className="rounded-full text-slate-400 transition hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                                >
+                                  <CircleHelp className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[280px] bg-slate-900 px-3 py-2 text-slate-100">
+                                <p className="text-xs leading-5">
+                                  Check this when the item should stay open and continue into the next weekly report.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </div>
                       </div>
+
+                      <FieldHintLabel
+                        label="Line Item Details"
+                        hint="Describe what changed, current impact, and what will happen next so reviewers have complete context."
+                        dataTour={isFirstDetailedItem ? "submit-card-detailed-text" : undefined}
+                      />
 
                       <Textarea
                         value={lineItem.text}
@@ -635,7 +868,8 @@ export function ContractUpdateCards({
                         onClick={(event) => event.stopPropagation()}
                       />
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </div>
@@ -646,7 +880,7 @@ export function ContractUpdateCards({
   }
 
   return (
-    <>
+    <TooltipProvider delayDuration={120}>
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -655,14 +889,22 @@ export function ContractUpdateCards({
               Toggle structured sections, owner and due-date tracking, and carry-forward support.
             </p>
           </div>
-          <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-            <span>{isEnhancedModeEnabled ? "Enhanced mode" : "Simple mode"}</span>
-            <Switch
-              checked={isEnhancedModeEnabled}
-              onCheckedChange={setIsEnhancedModeEnabled}
-              aria-label="Toggle enhanced submission workflow"
-            />
-          </label>
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+            <Button type="button" variant="outline" size="sm" onClick={launchSimpleWalkthrough}>
+              Simple walkthrough
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={launchAdvancedWalkthrough}>
+              Advanced walkthrough
+            </Button>
+            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+              <span>{isEnhancedModeEnabled ? "Enhanced mode" : "Simple mode"}</span>
+              <Switch
+                checked={isEnhancedModeEnabled}
+                onCheckedChange={setIsEnhancedModeEnabled}
+                aria-label="Toggle enhanced submission workflow"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -787,22 +1029,27 @@ export function ContractUpdateCards({
                               Start simple to reduce field overload, then switch to detailed if you need funding, risk, owner, or due-date tracking.
                             </p>
                           </div>
-                          <TabsList>
+                          <TabsList data-tour={isFirstCard ? "submit-card-mode-tabs" : undefined}>
                             <TabsTrigger value="SIMPLE">Simple</TabsTrigger>
-                            <TabsTrigger value="DETAILED">Detailed</TabsTrigger>
+                            <TabsTrigger
+                              value="DETAILED"
+                              data-tour={isFirstCard ? "submit-card-detailed-tab" : undefined}
+                            >
+                              Detailed
+                            </TabsTrigger>
                           </TabsList>
                         </div>
                       </div>
 
                       <TabsContent value="SIMPLE">
-                        {renderSimpleSubmission(contract, draft)}
+                        {renderSimpleSubmission(contract, draft, isFirstCard)}
                       </TabsContent>
                       <TabsContent value="DETAILED">
-                        {renderEnhancedLineItems(contract, draft)}
+                        {renderEnhancedLineItems(contract, draft, isFirstCard)}
                       </TabsContent>
                     </Tabs>
                   ) : (
-                    renderBasicLineItems(contract, draft)
+                    renderBasicLineItems(contract, draft, isFirstCard)
                   )}
                 </div>
 
@@ -816,6 +1063,7 @@ export function ContractUpdateCards({
                       <Button
                         type="button"
                         variant="outline"
+                        data-tour={isFirstCard ? "submit-card-carry-forward" : undefined}
                         disabled={draft.noUpdate || draft.submissionMode !== "DETAILED"}
                         onClick={() => carryForwardPreviousWeek(contract.id)}
                       >
@@ -826,6 +1074,7 @@ export function ContractUpdateCards({
                       type="button"
                       variant={draft.noUpdate ? "default" : "outline"}
                       disabled={draft.submitted}
+                      data-tour={isFirstCard ? "submit-card-no-update-button" : undefined}
                       onClick={() => toggleNoUpdate(contract.id)}
                     >
                       No Update
@@ -841,6 +1090,7 @@ export function ContractUpdateCards({
                     ) : (
                       <Button
                         type="button"
+                        data-tour={isFirstCard ? "submit-card-submit-button" : undefined}
                         onClick={() => submitContract(contract.id)}
                         disabled={!hasDraftContent}
                       >
@@ -908,7 +1158,7 @@ export function ContractUpdateCards({
       </Dialog>
 
       <CardWalkthrough
-        steps={walkthroughSteps}
+        steps={activeWalkthroughSteps}
         open={isWalkthroughOpen}
         onClose={handleWalkthroughClose}
       />
@@ -1018,6 +1268,6 @@ export function ContractUpdateCards({
           </DialogContent>
         )}
       </Dialog>
-    </>
+    </TooltipProvider>
   );
 }
