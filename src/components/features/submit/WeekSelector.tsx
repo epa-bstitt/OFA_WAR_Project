@@ -7,6 +7,7 @@ import { UseFormReturn } from "react-hook-form";
 import { SubmissionWithTerseInput } from "@/lib/validation/submission";
 import { getBiWeekRange, getCurrentBiWeek } from "@/lib/date-utils";
 import { format } from "date-fns";
+import { HintTooltip } from "./FormGuidance";
 
 interface BiWeekSelectorProps {
   form: UseFormReturn<SubmissionWithTerseInput>;
@@ -41,8 +42,13 @@ export function WeekSelector({ form, name }: BiWeekSelectorProps) {
       control={form.control}
       name={name}
       render={({ field }) => (
-        <FormItem>
-          <FormLabel>Bi-Weekly Period</FormLabel>
+        <FormItem data-tour="war-period">
+          <FormLabel>
+            <span className="inline-flex items-center gap-1.5">
+              Bi-Weekly Period
+              <HintTooltip content="Pick the current reporting period or, if needed, the previous one. The date range below confirms exactly what will be submitted." />
+            </span>
+          </FormLabel>
           <Select
             onValueChange={(value) => {
               field.onChange(new Date(value));

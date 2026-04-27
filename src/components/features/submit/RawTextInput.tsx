@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UseFormReturn } from "react-hook-form";
 import { SubmissionWithTerseInput } from "@/lib/validation/submission";
 import { cn } from "@/lib/utils";
+import { HintTooltip } from "./FormGuidance";
 
 interface RawTextInputProps {
   form: UseFormReturn<SubmissionWithTerseInput>;
@@ -28,8 +29,13 @@ export function RawTextInput({ form, name }: RawTextInputProps) {
       control={form.control}
       name={name}
       render={({ field }) => (
-        <FormItem>
-          <FormLabel>Bi-Weekly Activity Report</FormLabel>
+        <FormItem data-tour="war-raw-text">
+          <FormLabel>
+            <span className="inline-flex items-center gap-1.5">
+              Bi-Weekly Activity Report
+              <HintTooltip content="Paste your detailed notes here first. Bullet points, accomplishments, blockers, and next steps all work well because the AI can condense them into a terser version." />
+            </span>
+          </FormLabel>
           <FormControl>
             <Textarea
               {...field}
