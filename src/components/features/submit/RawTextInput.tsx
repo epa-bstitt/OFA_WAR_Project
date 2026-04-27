@@ -32,16 +32,16 @@ export function RawTextInput({ form, name }: RawTextInputProps) {
         <FormItem data-tour="war-raw-text">
           <FormLabel>
             <span className="inline-flex items-center gap-1.5">
-              Bi-Weekly Activity Report
-              <HintTooltip content="Paste your detailed notes here first. Bullet points, accomplishments, blockers, and next steps all work well because the AI can condense them into a terser version." />
+              Weekly Activity Report
+              <HintTooltip content="Paste your detailed weekly notes here first. Bullet points, accomplishments, blockers, and next steps all work well because the AI can condense them into a terser version." />
             </span>
           </FormLabel>
           <FormControl>
             <Textarea
               {...field}
-              placeholder={`Bi-weekly period of January 15-26, 2024
+              placeholder={`Week of January 15-21, 2024
 
-This bi-weekly period I worked on the following activities:
+This week I worked on the following activities:
 - Completed data analysis for Q4 emissions report
 - Attended stakeholder meeting on Tuesday
 - Reviewed 15 permit applications

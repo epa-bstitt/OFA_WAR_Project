@@ -5,37 +5,37 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UseFormReturn } from "react-hook-form";
 import { SubmissionWithTerseInput } from "@/lib/validation/submission";
-import { getBiWeekRange, getCurrentBiWeek } from "@/lib/date-utils";
+import { getCurrentWeek, getWeekRange } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { HintTooltip } from "./FormGuidance";
 
-interface BiWeekSelectorProps {
+interface WeekSelectorProps {
   form: UseFormReturn<SubmissionWithTerseInput>;
   name: "weekOf";
 }
 
-export function WeekSelector({ form, name }: BiWeekSelectorProps) {
-  const [biWeekOptions, setBiWeekOptions] = useState<{ value: string; label: string; range: string }[]>([]);
+export function WeekSelector({ form, name }: WeekSelectorProps) {
+  const [weekOptions, setWeekOptions] = useState<{ value: string; label: string; range: string }[]>([]);
 
   useEffect(() => {
-    const currentBiWeek = getCurrentBiWeek();
+    const currentWeek = getCurrentWeek();
     const currentYear = new Date().getFullYear();
 
     const options = [];
-    // Current bi-weekly period and previous period only
-    for (let biWeek = currentBiWeek; biWeek >= Math.max(1, currentBiWeek - 1); biWeek--) {
-      const { start, end } = getBiWeekRange(biWeek, currentYear);
-      const periodDate = new Date(start);
-      const value = periodDate.toISOString();
-      const label = `Period ${biWeek}, ${currentYear}`;
+    // Current week and previous week only
+    for (let week = currentWeek; week >= Math.max(1, currentWeek - 1); week--) {
+      const { start, end } = getWeekRange(week, currentYear);
+      const weekDate = new Date(start);
+      const value = weekDate.toISOString();
+      const label = `Week ${week}, ${currentYear}`;
       const range = `${format(start, "MMM d")} - ${format(end, "MMM d, yyyy")}`;
       options.push({ value, label, range });
     }
-    setBiWeekOptions(options);
+    setWeekOptions(options);
   }, []);
 
   const selectedValue = form.watch(name);
-  const selectedPeriod = biWeekOptions.find(opt => opt.value === selectedValue?.toISOString?.());
+  const selectedPeriod = weekOptions.find((opt) => opt.value === selectedValue?.toISOString?.());
 
   return (
     <FormField
@@ -45,8 +45,8 @@ export function WeekSelector({ form, name }: BiWeekSelectorProps) {
         <FormItem data-tour="war-period">
           <FormLabel>
             <span className="inline-flex items-center gap-1.5">
-              Bi-Weekly Period
-              <HintTooltip content="Pick the current reporting period or, if needed, the previous one. The date range below confirms exactly what will be submitted." />
+              Reporting Week
+              <HintTooltip content="Pick the current reporting week or, if needed, the previous one. The date range below confirms exactly what will be submitted." />
             </span>
           </FormLabel>
           <Select
@@ -57,11 +57,11 @@ export function WeekSelector({ form, name }: BiWeekSelectorProps) {
           >
             <FormControl>
               <SelectTrigger>
-                <SelectValue placeholder="Select a bi-weekly period" />
+                <SelectValue placeholder="Select a reporting week" />
               </SelectTrigger>
             </FormControl>
             <SelectContent>
-              {biWeekOptions.map((option) => (
+              {weekOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   <div className="flex flex-col">
                     <span>{option.label}</span>

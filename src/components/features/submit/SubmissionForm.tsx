@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, AlertCircle, PlayCircle, Sparkles } from "lucide-react";
 import { submissionWithTerseSchema, SubmissionWithTerseInput } from "@/lib/validation/submission";
-import { getBiWeekDate, getCurrentBiWeek } from "@/lib/date-utils";
+import { getCurrentWeek, getWeekDate } from "@/lib/date-utils";
 import { submitWAR } from "@/app/actions/submissions";
 import { convertToTerseAction } from "@/app/actions/ai-convert";
 import { WeekSelector } from "./WeekSelector";
@@ -70,9 +70,9 @@ export function SubmissionForm() {
     loadSettings();
   }, []);
 
-  // Initialize form with current bi-weekly period as default
-  const currentBiWeek = getCurrentBiWeek();
-  const defaultPeriodDate = getBiWeekDate(currentBiWeek);
+  // Initialize form with the current reporting week as default
+  const currentWeek = getCurrentWeek();
+  const defaultPeriodDate = getWeekDate(currentWeek);
 
   const form = useForm<SubmissionWithTerseInput>({
     resolver: zodResolver(submissionWithTerseSchema),
@@ -93,9 +93,9 @@ export function SubmissionForm() {
       {
         id: "period",
         selector: "[data-tour='war-period']",
-        title: "Start with the reporting period",
+        title: "Start with the reporting week",
         description:
-          "Confirm the current bi-weekly period first. The form defaults to the active period so most users can keep moving without changing anything.",
+          "Confirm the current reporting week first. The form defaults to the active week so most users can keep moving without changing anything.",
       },
       {
         id: "details",
@@ -249,9 +249,9 @@ export function SubmissionForm() {
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <CardTitle>Submit Bi-Weekly Activity Report</CardTitle>
+            <CardTitle>Submit Weekly Activity Report</CardTitle>
             <CardDescription>
-              Enter your bi-weekly status update below. Be concise but thorough.
+              Enter your weekly status update below. Be concise but thorough.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
