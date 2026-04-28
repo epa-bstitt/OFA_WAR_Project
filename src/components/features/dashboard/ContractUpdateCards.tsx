@@ -180,6 +180,8 @@ export function ContractUpdateCards({
   const [isEnhancedModeEnabled, setIsEnhancedModeEnabled] = useState(enhancedEditorEnabled);
   const [walkthroughVariant, setWalkthroughVariant] = useState<WalkthroughVariant | null>(null);
   const [selectedActiveContractId, setSelectedActiveContractId] = useState<string | null>(null);
+  const [isSavingActiveContract, setIsSavingActiveContract] = useState(false);
+  const [activeContractSaveError, setActiveContractSaveError] = useState<string | null>(null);
   const [activeContracts, setActiveContracts] = useState<ActiveContractState>(
     Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract]))
   );
@@ -482,6 +484,12 @@ export function ContractUpdateCards({
   }
 
   function submitContract(contractId: string) {
+    const currentDraft = drafts[contractId];
+
+    if (!currentDraft) {
+      return;
+    }
+
     setDrafts((prev) => {
       const current = prev[contractId];
       const hasContent =
@@ -517,6 +525,27 @@ export function ContractUpdateCards({
         },
       };
     });
+
+    const summary =
+      currentDraft.submissionMode === "SIMPLE"
+        ? currentDraft.simpleText.trim()
+        : currentDraft.lineItems
+            .map((lineItem) => lineItem.text.trim())
+            .filter(Boolean)
+            .join("\n\n");
+
+    if (summary) {
+      void fetch(`/api/contracts/${contractId}/wars`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary,
+          status: "IN_REVIEW",
+        }),
+      }).catch(() => {
+        // Keep UI responsive even if background history sync fails.
+      });
+    }
   }
 
   function enableEditing(contractId: string) {
@@ -542,6 +571,48 @@ export function ContractUpdateCards({
         [field]: value,
       },
     }));
+  }
+
+  async function saveActiveContractDetails() {
+    if (!selectedActiveContractId || !selectedActiveContract) {
+      return;
+    }
+
+    setIsSavingActiveContract(true);
+    setActiveContractSaveError(null);
+
+    try {
+      const selectedContractFromList = contracts.find((contract) => contract.id === selectedActiveContractId);
+
+      const response = await fetch(`/api/contracts/${selectedActiveContractId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contractName: selectedActiveContract.contractName,
+          cor: selectedActiveContract.cor,
+          contractNumber: selectedActiveContract.contractNumber,
+          office: selectedActiveContract.office,
+          nextPeriodOfPerf: selectedActiveContract.nextPeriodOfPerf,
+          ultimateCompletionDate: selectedActiveContract.ultimateCompletionDate,
+          co: selectedActiveContract.co,
+          cs: selectedActiveContract.cs,
+          orderNumber: selectedActiveContract.orderNumber,
+          category: selectedContractFromList?.category ?? "Contract",
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to save active contract details.");
+      }
+
+      setSelectedActiveContractId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save active contract details.";
+      setActiveContractSaveError(message);
+    } finally {
+      setIsSavingActiveContract(false);
+    }
   }
 
   function renderBasicLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
@@ -1165,7 +1236,12 @@ export function ContractUpdateCards({
 
       <Dialog
         open={Boolean(selectedActiveContractId)}
-        onOpenChange={(open) => !open && setSelectedActiveContractId(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedActiveContractId(null);
+            setActiveContractSaveError(null);
+          }
+        }}
       >
         {selectedActiveContractId && selectedActiveContract && (
           <DialogContent className="max-w-2xl">
@@ -1261,7 +1337,14 @@ export function ContractUpdateCards({
             </div>
 
             <DialogFooter>
-              <Button type="button" onClick={() => setSelectedActiveContractId(null)}>
+              {activeContractSaveError && (
+                <p className="mr-auto text-sm text-rose-600">{activeContractSaveError}</p>
+              )}
+              <Button
+                type="button"
+                onClick={saveActiveContractDetails}
+                disabled={isSavingActiveContract}
+              >
                 Save
               </Button>
             </DialogFooter>

@@ -31,6 +31,23 @@ export interface MockContract {
   history: MockContractSubmission[];
 }
 
+export interface ContractFormInput {
+  contractName: string;
+  cor: string;
+  contractNumber: string;
+  office: string;
+  nextPeriodOfPerf: string;
+  ultimateCompletionDate: string;
+  co: string;
+  cs: string;
+  orderNumber: string;
+  category?: string;
+}
+
+interface ContractStore {
+  contracts: MockContract[];
+}
+
 const mockContractsByUser: Record<string, MockContract[]> = {
   "demo-admin": [
     {
@@ -216,18 +233,203 @@ const mockContractsByUser: Record<string, MockContract[]> = {
   "demo-overseer": [],
 };
 
-export function getMockContractsForUser(userId: string): MockContract[] {
-  const contracts = mockContractsByUser[userId];
+function slugifyContractName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 36);
+}
 
-  if (contracts && contracts.length > 0) {
-    return contracts;
+function createContractId(contractName: string): string {
+  const slug = slugifyContractName(contractName);
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${slug || "contract"}-${suffix}`;
+}
+
+function normalizeContractInput(input: ContractFormInput): ContractFormInput {
+  return {
+    contractName: input.contractName.trim(),
+    cor: input.cor.trim(),
+    contractNumber: input.contractNumber.trim(),
+    office: input.office.trim(),
+    nextPeriodOfPerf: input.nextPeriodOfPerf.trim(),
+    ultimateCompletionDate: input.ultimateCompletionDate.trim(),
+    co: input.co.trim(),
+    cs: input.cs.trim(),
+    orderNumber: input.orderNumber.trim(),
+    category: (input.category ?? "Contract").trim() || "Contract",
+  };
+}
+
+function createContractRecord(input: ContractFormInput): MockContract {
+  const normalized = normalizeContractInput(input);
+
+  return {
+    id: createContractId(normalized.contractName),
+    category: normalized.category ?? "Contract",
+    contractName: normalized.contractName,
+    imageUrl:
+      "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80",
+    imageAlt: "Contract and acquisition planning documents on an office desk.",
+    activeContract: {
+      contractName: normalized.contractName,
+      cor: normalized.cor,
+      contractNumber: normalized.contractNumber,
+      office: normalized.office,
+      nextPeriodOfPerf: normalized.nextPeriodOfPerf,
+      ultimateCompletionDate: normalized.ultimateCompletionDate,
+      co: normalized.co,
+      cs: normalized.cs,
+      orderNumber: normalized.orderNumber,
+    },
+    previousWeekLabel: "Week of N/A",
+    previousWeekSubmission: "No prior submission yet.",
+    currentUpdatePlaceholder: `Add this week's ${normalized.contractName} contract update here.`,
+    history: [],
+  };
+}
+
+const globalForContractStore = globalThis as unknown as {
+  contractStore: ContractStore | undefined;
+};
+
+function buildInitialStore(): ContractStore {
+  const primaryContracts = mockContractsByUser["demo-admin"];
+  const clonedContracts = primaryContracts.map((contract) => ({
+    ...contract,
+    activeContract: { ...contract.activeContract },
+    history: contract.history.map((entry) => ({ ...entry })),
+  }));
+
+  return { contracts: clonedContracts };
+}
+
+function getContractStore(): ContractStore {
+  if (!globalForContractStore.contractStore) {
+    globalForContractStore.contractStore = buildInitialStore();
   }
 
-  return mockContractsByUser["demo-admin"];
+  return globalForContractStore.contractStore;
+}
+
+function cloneContract(contract: MockContract): MockContract {
+  return {
+    ...contract,
+    activeContract: { ...contract.activeContract },
+    history: contract.history.map((entry) => ({ ...entry })),
+  };
+}
+
+export function getContractsOutlook(): MockContract[] {
+  return getContractStore().contracts.map(cloneContract);
+}
+
+export function createContract(input: ContractFormInput): MockContract {
+  const contract = createContractRecord(input);
+  getContractStore().contracts.unshift(contract);
+  return cloneContract(contract);
+}
+
+export function updateContract(contractId: string, input: ContractFormInput): MockContract | null {
+  const store = getContractStore();
+  const index = store.contracts.findIndex((contract) => contract.id === contractId);
+
+  if (index === -1) {
+    return null;
+  }
+
+  const current = store.contracts[index];
+  const normalized = normalizeContractInput(input);
+  const updated: MockContract = {
+    ...current,
+    category: normalized.category ?? current.category,
+    contractName: normalized.contractName,
+    activeContract: {
+      contractName: normalized.contractName,
+      cor: normalized.cor,
+      contractNumber: normalized.contractNumber,
+      office: normalized.office,
+      nextPeriodOfPerf: normalized.nextPeriodOfPerf,
+      ultimateCompletionDate: normalized.ultimateCompletionDate,
+      co: normalized.co,
+      cs: normalized.cs,
+      orderNumber: normalized.orderNumber,
+    },
+    currentUpdatePlaceholder: `Add this week's ${normalized.contractName} contract update here.`,
+  };
+
+  store.contracts[index] = updated;
+  return cloneContract(updated);
+}
+
+export function deleteContract(contractId: string): boolean {
+  const store = getContractStore();
+  const initialLength = store.contracts.length;
+  store.contracts = store.contracts.filter((contract) => contract.id !== contractId);
+  return store.contracts.length < initialLength;
+}
+
+export function addWarEntryToContract(
+  contractId: string,
+  update: { summary: string; weekOf?: string; status?: MockContractSubmission["status"] }
+): MockContractSubmission | null {
+  const store = getContractStore();
+  const contract = store.contracts.find((item) => item.id === contractId);
+
+  if (!contract) {
+    return null;
+  }
+
+  const now = new Date();
+  const isoDate = now.toISOString().slice(0, 10);
+  const weekOf = update.weekOf?.trim() || now.toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const summary = update.summary.trim();
+
+  if (!summary) {
+    return null;
+  }
+
+  const entry: MockContractSubmission = {
+    id: `${contractId}-${now.getTime()}`,
+    weekOf,
+    submittedAt: isoDate,
+    status: update.status ?? "IN_REVIEW",
+    summary,
+  };
+
+  contract.history.unshift(entry);
+  contract.previousWeekLabel = `Week of ${entry.weekOf}`;
+  contract.previousWeekSubmission = entry.summary;
+
+  return { ...entry };
+}
+
+export function getWarEntriesForContract(contractId: string): MockContractSubmission[] {
+  const contract = getContractStore().contracts.find((item) => item.id === contractId);
+  if (!contract) {
+    return [];
+  }
+
+  return contract.history.map((entry) => ({ ...entry }));
+}
+
+export function getMockContractsForUser(userId: string): MockContract[] {
+  if (userId === "demo-admin") {
+    return getContractsOutlook();
+  }
+
+  const contracts = mockContractsByUser[userId];
+  if (contracts && contracts.length > 0) {
+    return contracts.map(cloneContract);
+  }
+
+  return getContractsOutlook();
 }
 
 export function getMockContractById(contractId: string): MockContract | undefined {
-  return Object.values(mockContractsByUser)
-    .flat()
-    .find((contract) => contract.id === contractId);
+  return getContractsOutlook().find((contract) => contract.id === contractId);
 }

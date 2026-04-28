@@ -8,6 +8,8 @@ import {
   BarChart,
   Users,
   FileSearch,
+  Contact,
+  Table2,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -27,12 +29,24 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
   ],
   AGGREGATOR: [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Review Queue", href: "/review", icon: Inbox },
+    { label: "WAR Review", href: "/review", icon: Inbox },
+    { label: "Contracts", href: "/contracts", icon: Contact },
+    {
+      label: "Current and Active Contracts/Purchase Order Outlook",
+      href: "/contracts/outlook",
+      icon: Table2,
+    },
     { label: "Prompts", href: "/prompts", icon: Settings },
   ],
   PROGRAM_OVERSEER: [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Approve", href: "/approve", icon: CheckCircle },
+    { label: "WAR Review", href: "/approve", icon: CheckCircle },
+    { label: "Contracts", href: "/contracts", icon: Contact },
+    {
+      label: "Current and Active Contracts/Purchase Order Outlook",
+      href: "/contracts/outlook",
+      icon: Table2,
+    },
     { label: "Analytics", href: "/analytics", icon: BarChart },
   ],
   ADMINISTRATOR: [
