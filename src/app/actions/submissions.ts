@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { sendWorkflowEmail } from "@/lib/notifications/email";
 import { submissionSchema, SubmissionInput, sanitizeRawText } from "@/lib/validation/submission";
 import { getBiWeekDate, getCurrentBiWeek } from "@/lib/date-utils";
+import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
+import { getContractsOutlook } from "@/lib/mock-contracts";
 import { cookies } from "next/headers";
 
 // Types matching Prisma schema
@@ -26,7 +29,7 @@ export interface Submission {
   rawText: string;
   terseText?: string | null;
   terseVersion?: string | null;
-  status: "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "PUBLISHED";
+  status: "SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED";
   isAiGenerated: boolean;
   aiConfidence?: number | null;
   createdAt: Date;
@@ -101,19 +104,40 @@ export async function submitWAR(data: SubmissionInput) {
     }
 
     const { weekOf, rawText } = validated.data;
+    const currentPeriod = getCurrentSubmissionPeriod(weekOf);
 
-    // 3. Check for existing submission for this week
+    // 3. Check for an existing submission in this biweekly period
     const existingSubmission = await prisma.submission.findFirst({
       where: {
         userId: session.user.id,
-        weekOf: weekOf,
+        deletedAt: null,
+        weekOf: {
+          gte: currentPeriod.start,
+          lte: currentPeriod.end,
+        },
+      },
+      include: {
+        reviews: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
     });
 
     if (existingSubmission) {
+      const latestReviewStatus = existingSubmission.reviews?.[0]?.status;
+      const canResubmit = latestReviewStatus === "CHANGES_REQUESTED" || existingSubmission.status === "INFO_NEEDED";
+
+      if (canResubmit) {
+        return {
+          success: false,
+          error: "You already have a submission for this biweekly period. Open it from My Submissions and edit the existing card after the reviewer comment.",
+        };
+      }
+
       return {
         success: false,
-        error: "You have already submitted a WAR for this week. Please edit your existing submission.",
+        error: "You have already submitted a WAR for this biweekly period. Please edit your existing submission.",
       };
     }
 
@@ -138,10 +162,10 @@ export async function submitWAR(data: SubmissionInput) {
         userId: session.user.id,
         resourceType: "submission",
         resourceId: submission.id,
-        metadata: {
+        metadata: JSON.stringify({
           weekOf: weekOf.toISOString(),
           status: "SUBMITTED",
-        },
+        }),
       },
     });
 
@@ -164,9 +188,9 @@ export async function submitWAR(data: SubmissionInput) {
           userId: "unknown", // We don't have user context here
           resourceType: "submission",
           resourceId: "failed",
-          metadata: {
+          metadata: JSON.stringify({
             error: error.message,
-          },
+          }),
         },
       }).catch(() => {
         // Ignore audit log errors
@@ -337,7 +361,7 @@ export async function deleteSubmission(
         userId: session.user.id,
         resourceType: "submission",
         resourceId: id,
-        metadata: { deletedAt: new Date().toISOString() },
+        metadata: JSON.stringify({ deletedAt: new Date().toISOString() }),
       },
     });
 
@@ -348,6 +372,141 @@ export async function deleteSubmission(
   } catch (error) {
     console.error("Error deleting submission:", error);
     return { success: false, error: "Failed to delete submission" };
+  }
+}
+
+/**
+ * Server Action: Update and resubmit an INFO_NEEDED submission
+ */
+export async function resubmitInfoNeededSubmission(
+  id: string,
+  rawText: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const sanitizedText = sanitizeRawText(rawText);
+    if (!sanitizedText || sanitizedText.length < 10) {
+      return { success: false, error: "Submission text must be at least 10 characters" };
+    }
+
+    const submission = await prisma.submission.findFirst({
+      where: {
+        id,
+        userId: session.user.id,
+        deletedAt: null,
+        status: { in: ["INFO_NEEDED", "SUBMITTED", "CHANGES_REQUESTED"] },
+      },
+      include: {
+        reviews: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!submission) {
+      return { success: false, error: "Submission not found or cannot be updated" };
+    }
+
+    const latestReviewStatus = submission.reviews?.[0]?.status;
+    const canEdit = latestReviewStatus === "CHANGES_REQUESTED" || submission.status === "INFO_NEEDED";
+
+    if (!canEdit) {
+      return {
+        success: false,
+        error: "You can only edit this submission after the Program Overseer leaves a comment requesting changes.",
+      };
+    }
+
+    await prisma.submission.update({
+      where: { id },
+      data: {
+        rawText: sanitizedText,
+        status: "SUBMITTED",
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: "SUBMISSION_RESUBMITTED",
+        userId: session.user.id,
+        resourceType: "submission",
+        resourceId: id,
+        metadata: JSON.stringify({ fromStatus: submission.status, toStatus: "SUBMITTED" }),
+      },
+    });
+
+    const overseers = await prisma.user.findMany({
+      where: {
+        role: "PROGRAM_OVERSEER",
+        isActive: true,
+      },
+      select: {
+        email: true,
+      },
+    });
+
+    const latestChangeRequest = await prisma.review.findFirst({
+      where: {
+        submissionId: id,
+        status: "CHANGES_REQUESTED",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        reviewer: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const overseerEmails = overseers.map((user) => user.email).filter(Boolean);
+    if (overseerEmails.length > 0) {
+      const appUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const contracts = getContractsOutlook();
+      const mappedContract = contracts.find((contract) =>
+        (contract.assigneeIds ?? []).includes(session.user.id)
+      );
+      const contractName = mappedContract?.contractName || "Assigned Contract";
+      const reviewLink = `${appUrl}/review/${id}`;
+      const reviewerName =
+        latestChangeRequest?.reviewer.name || latestChangeRequest?.reviewer.email || "Reviewer";
+      const reviewerTimestamp = latestChangeRequest?.createdAt
+        ? latestChangeRequest.createdAt.toISOString()
+        : "Unknown";
+      const resubmittedTimestamp = new Date().toISOString();
+
+      await sendWorkflowEmail({
+        to: overseerEmails,
+        subject: `WAR Resubmitted for Review: ${contractName}`,
+        textBody:
+          `A contributor has resubmitted a WAR after an Info Needed request.\n\n` +
+          `Reviewer who requested change: ${reviewerName}\n` +
+          `Original request time (UTC): ${reviewerTimestamp}\n` +
+          `Resubmitted time (UTC): ${resubmittedTimestamp}\n` +
+          `Contract: ${contractName}\n` +
+          `Review the updated submission: ${reviewLink}\n\n` +
+          `Submission ID: ${id}`,
+      });
+    }
+
+    revalidatePath("/approve");
+    revalidatePath("/submissions");
+    revalidatePath(`/submissions/${id}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error resubmitting submission:", error);
+    return { success: false, error: "Failed to resubmit submission" };
   }
 }
 

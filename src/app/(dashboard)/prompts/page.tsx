@@ -2,9 +2,12 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PromptManager } from "@/components/features/prompts/PromptManager";
+import { Card, CardContent } from "@/components/ui/card";
 import { getPrompts, deletePrompt, setActivePrompt } from "@/app/actions/prompts";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { auth } from "@/lib/auth";
+import { getStoredSettings } from "@/app/api/admin/settings/store";
+import { getOverseerSettings } from "@/lib/overseer-settings";
 
 export const metadata: Metadata = {
   title: "Publish to OneNote",
@@ -24,6 +27,27 @@ export default async function PromptsPage() {
   const hasPermission = await hasMinimumRoleLevel("AGGREGATOR");
   if (!hasPermission) {
     redirect("/unauthorized");
+  }
+
+  const storedSettings = await getStoredSettings();
+  const aggregatorAccess = getOverseerSettings(storedSettings).aggregatorAccess;
+  const isAggregator = session.user.role === "AGGREGATOR";
+
+  if (isAggregator && !aggregatorAccess.promptTemplateManagementEnabled) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="AI Prompt Templates"
+          description="Customize the AI prompts used for converting raw WAR text to terse format."
+        />
+
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-slate-600">
+            Prompt template management is currently unavailable for Aggregator users. Contact the program overseer to restore access.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   // Fetch prompts

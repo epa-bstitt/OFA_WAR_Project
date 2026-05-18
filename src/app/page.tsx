@@ -6,6 +6,14 @@ export default async function HomePage() {
   
   // Redirect to dashboard if logged in, otherwise to login
   if (session?.user) {
+    if (session.user.role === "PROGRAM_OVERSEER") {
+      redirect("/approve");
+    }
+
+    if (session.user.role === "AGGREGATOR") {
+      redirect("/review");
+    }
+
     redirect("/dashboard");
   } else {
     redirect("/login");

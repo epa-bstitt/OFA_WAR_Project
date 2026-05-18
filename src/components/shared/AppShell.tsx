@@ -1,5 +1,4 @@
 import { Header } from "./Header";
-import { Sidebar } from "./Sidebar";
 import { Footer } from "./Footer";
 
 interface AppShellProps {
@@ -10,8 +9,7 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <div className="flex-1 flex">
-        <Sidebar className="hidden lg:block" />
+      <div className="flex-1">
         <main id="main-content" className="flex-1 p-6 overflow-auto">
           {children}
         </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,10 +41,13 @@ import type { ActiveContractDetails, MockContract } from "@/lib/mock-contracts";
 import { cn } from "@/lib/utils";
 import { CircleHelp } from "lucide-react";
 import { CardWalkthrough, CardWalkthroughStep } from "./CardWalkthrough";
+import { getCurrentSubmissionPeriod, isSubmissionWindowOpen } from "@/lib/submission-periods";
 
 interface ContractUpdateCardsProps {
   contracts: MockContract[];
   enhancedEditorEnabled?: boolean;
+  submissionsEnabled?: boolean;
+  deadlineOverrideEnabled?: boolean;
 }
 
 type WalkthroughVariant = "simple" | "advanced";
@@ -70,6 +74,10 @@ interface DraftState {
   noUpdate: boolean;
   submitted: boolean;
   submittedAt: string | null;
+  reviewSubmissionId: string | null;
+  historyEntryId: string | null;
+  reopenedAfterDeadline: boolean;
+  deadlineLocked: boolean;
 }
 
 type ActiveContractState = Record<string, ActiveContractDetails>;
@@ -107,6 +115,22 @@ const statusStyles: Record<LineItemStatus, string> = {
   RISK: "bg-amber-100 text-amber-800 border-amber-200",
   CRITICAL: "bg-rose-100 text-rose-800 border-rose-200",
 };
+
+function getDraftSeverity(draft: DraftState): LineItemStatus {
+  if (draft.submissionMode === "SIMPLE") {
+    return draft.simpleStatus;
+  }
+
+  if (draft.lineItems.some((lineItem) => lineItem.status === "CRITICAL")) {
+    return "CRITICAL";
+  }
+
+  if (draft.lineItems.some((lineItem) => lineItem.status === "RISK")) {
+    return "RISK";
+  }
+
+  return "NORMAL";
+}
 
 const categoryOptions: Array<{ value: LineItemCategory; label: string; description: string }> = [
   { value: "GENERAL", label: "General", description: "General weekly context and summary notes." },
@@ -151,33 +175,90 @@ const cardThemes: Record<string, { shell: string; panel: string; badge: string }
   },
 };
 
+const RECOMPETES_CATEGORY = "New Awards and Recompetes";
+const LEGACY_CATEGORY = "Legacy Contracts";
+
+function getCurrentTableLabel(category: string) {
+  if (category === RECOMPETES_CATEGORY) {
+    return "New Awards and Recompetes";
+  }
+
+  if (category === LEGACY_CATEGORY) {
+    return "Legacy Contracts";
+  }
+
+  return "Current and Active Contracts/Purchase Order Outlook";
+}
+
 const WALKTHROUGH_DISMISSED_KEY = "war-submit-card-walkthrough-dismissed";
 
 export function ContractUpdateCards({
   contracts,
   enhancedEditorEnabled = true,
+  submissionsEnabled = true,
+  deadlineOverrideEnabled = false,
 }: ContractUpdateCardsProps) {
+  const router = useRouter();
+  const referenceNow = useMemo(() => new Date(), []);
+  const submissionWindowOpen = useMemo(
+    () => isSubmissionWindowOpen(referenceNow),
+    [referenceNow]
+  );
+  const schedulingOverrideActive = deadlineOverrideEnabled;
+  const currentPeriod = useMemo(
+    () => getCurrentSubmissionPeriod(referenceNow),
+    [referenceNow]
+  );
+
+  function canEditDraft(draft: DraftState): boolean {
+    if (draft.reviewSubmissionId) {
+      // Always allow opening existing submissions in Edit mode first.
+      // Server-side rules still enforce whether an update can be saved.
+      return true;
+    }
+
+    return submissionsEnabled && (submissionWindowOpen || schedulingOverrideActive);
+  }
+
   const initialDrafts = useMemo<Record<string, DraftState>>(
     () =>
       Object.fromEntries(
-        contracts.map((contract) => [
-          contract.id,
-          {
-            submissionMode: "SIMPLE",
-            simpleText: "",
-            simpleStatus: "NORMAL",
-            lineItems: [createLineItem()],
-            noUpdate: false,
-            submitted: false,
-            submittedAt: null,
-          },
-        ])
+        contracts.map((contract) => {
+          const currentCycleEntry = contract.history.find((entry) => {
+            const submittedAt = new Date(entry.submittedAt);
+            return submittedAt >= currentPeriod.start && submittedAt <= currentPeriod.end;
+          });
+
+          const reopenedAfterDeadline =
+            schedulingOverrideActive ||
+            contract.latestFeedback?.status === "CHANGES_REQUESTED" ||
+            contract.latestFeedback?.status === "INFO_NEEDED";
+          const deadlineLocked = !submissionWindowOpen && !schedulingOverrideActive;
+
+          return [
+            contract.id,
+            {
+              submissionMode: "SIMPLE",
+              simpleText: "",
+              simpleStatus: "NORMAL",
+              lineItems: [createLineItem()],
+              noUpdate: false,
+              submitted: Boolean(currentCycleEntry),
+              submittedAt: currentCycleEntry ? currentCycleEntry.submittedAt : null,
+              reviewSubmissionId: currentCycleEntry ? currentCycleEntry.id : null,
+              historyEntryId: currentCycleEntry ? currentCycleEntry.id : null,
+              reopenedAfterDeadline,
+              deadlineLocked,
+            },
+          ];
+        })
       ),
-    [contracts]
+    [contracts, currentPeriod.id, schedulingOverrideActive, submissionWindowOpen]
   );
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(initialDrafts);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [isEnhancedModeEnabled, setIsEnhancedModeEnabled] = useState(enhancedEditorEnabled);
+  const cardDensity = "detailed";
   const [walkthroughVariant, setWalkthroughVariant] = useState<WalkthroughVariant | null>(null);
   const [selectedActiveContractId, setSelectedActiveContractId] = useState<string | null>(null);
   const [isSavingActiveContract, setIsSavingActiveContract] = useState(false);
@@ -185,6 +266,11 @@ export function ContractUpdateCards({
   const [activeContracts, setActiveContracts] = useState<ActiveContractState>(
     Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract]))
   );
+
+  useEffect(() => {
+    setDrafts(initialDrafts);
+    setActiveContracts(Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract])));
+  }, [contracts, initialDrafts]);
 
   const selectedContract =
     contracts.find((contract) => contract.id === selectedContractId) ?? null;
@@ -453,6 +539,8 @@ export function ContractUpdateCards({
           noUpdate,
           submitted: current.submitted,
           submittedAt: current.submittedAt,
+          reviewSubmissionId: current.reviewSubmissionId,
+          historyEntryId: current.historyEntryId,
         },
       };
     });
@@ -483,10 +571,14 @@ export function ContractUpdateCards({
     }));
   }
 
-  function submitContract(contractId: string) {
+  async function submitContract(contractId: string) {
     const currentDraft = drafts[contractId];
 
     if (!currentDraft) {
+      return;
+    }
+
+    if (!submissionsEnabled && !currentDraft.reviewSubmissionId) {
       return;
     }
 
@@ -535,17 +627,49 @@ export function ContractUpdateCards({
             .join("\n\n");
 
     if (summary) {
-      void fetch(`/api/contracts/${contractId}/wars`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summary,
-          status: "IN_REVIEW",
-        }),
-      }).catch(() => {
-        // Keep UI responsive even if background history sync fails.
-      });
+      try {
+        const response = await fetch(`/api/contracts/${contractId}/wars`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            summary,
+            status: "IN_REVIEW",
+            submissionId: currentDraft.reviewSubmissionId,
+            historyEntryId: currentDraft.historyEntryId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to submit WAR update to review queue.");
+        }
+
+        const payload = await response.json().catch(() => null);
+        const reviewSubmissionId = typeof payload?.submissionId === "string" ? payload.submissionId : null;
+        const historyEntryId = typeof payload?.entry?.id === "string" ? payload.entry.id : null;
+
+        setDrafts((prev) => ({
+          ...prev,
+          [contractId]: {
+            ...prev[contractId],
+            reviewSubmissionId: reviewSubmissionId ?? prev[contractId].reviewSubmissionId,
+            historyEntryId: historyEntryId ?? prev[contractId].historyEntryId,
+          },
+        }));
+
+        router.refresh();
+      } catch (error) {
+        console.error(error);
+        setDrafts((prev) => ({
+          ...prev,
+          [contractId]: {
+            ...prev[contractId],
+            submitted: false,
+            submittedAt: null,
+          },
+        }));
+      }
     }
+
   }
 
   function enableEditing(contractId: string) {
@@ -616,6 +740,8 @@ export function ContractUpdateCards({
   }
 
   function renderBasicLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
+    const isDraftLocked = draft.submitted || !canEditDraft(draft);
+
     return (
       <div className="space-y-3">
         {draft.lineItems.map((lineItem, index) => (
@@ -640,7 +766,7 @@ export function ContractUpdateCards({
                     dataTour={isFirstCard && index === 0 ? "submit-card-basic-status" : undefined}
                   />
                   <Select
-                    disabled={draft.submitted}
+                    disabled={isDraftLocked}
                     value={lineItem.status}
                     onValueChange={(value) =>
                       patchLineItem(contract.id, lineItem.id, { status: value as LineItemStatus })
@@ -660,7 +786,7 @@ export function ContractUpdateCards({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={draft.submitted || draft.lineItems.length === 1}
+                  disabled={isDraftLocked || draft.lineItems.length === 1}
                   onClick={() => removeLineItem(contract.id, lineItem.id)}
                 >
                   Remove
@@ -676,7 +802,7 @@ export function ContractUpdateCards({
               value={lineItem.text}
               placeholder={index === 0 ? contract.currentUpdatePlaceholder : "Add another line item."}
               className="min-h-[110px] resize-y border-slate-400 bg-white text-slate-900 shadow-sm"
-              disabled={draft.submitted}
+              disabled={isDraftLocked}
               onChange={(event) => patchLineItem(contract.id, lineItem.id, { text: event.target.value })}
               onClick={(event) => event.stopPropagation()}
             />
@@ -686,7 +812,7 @@ export function ContractUpdateCards({
         <Button
           type="button"
           variant="outline"
-          disabled={draft.submitted || draft.noUpdate}
+          disabled={isDraftLocked || draft.noUpdate}
           onClick={() => addLineItem(contract.id)}
         >
           Add Line Item
@@ -696,6 +822,8 @@ export function ContractUpdateCards({
   }
 
   function renderSimpleSubmission(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
+    const isDraftLocked = draft.submitted || !canEditDraft(draft);
+
     return (
       <div className="rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -712,7 +840,7 @@ export function ContractUpdateCards({
               dataTour={isFirstCard ? "submit-card-simple-status" : undefined}
             />
             <Select
-              disabled={draft.submitted}
+              disabled={isDraftLocked}
               value={draft.simpleStatus}
               onValueChange={(value) =>
                 patchSimpleDraft(contract.id, { simpleStatus: value as LineItemStatus })
@@ -746,7 +874,7 @@ export function ContractUpdateCards({
           value={draft.simpleText}
           placeholder={`Example: ${contract.currentUpdatePlaceholder}`}
           className="min-h-[150px] resize-y border-slate-400 bg-white text-slate-900 shadow-sm"
-          disabled={draft.submitted}
+          disabled={isDraftLocked}
           onChange={(event) => patchSimpleDraft(contract.id, { simpleText: event.target.value })}
           onClick={(event) => event.stopPropagation()}
         />
@@ -755,6 +883,8 @@ export function ContractUpdateCards({
   }
 
   function renderEnhancedLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
+    const isDraftLocked = draft.submitted || !canEditDraft(draft);
+
     return (
       <div className="space-y-4" data-tour={isFirstCard ? "submit-card-detailed-section" : undefined}>
         {categoryOptions.map((category) => {
@@ -772,7 +902,7 @@ export function ContractUpdateCards({
                   variant="outline"
                   size="sm"
                   data-tour={isFirstCard && category.value === "GENERAL" ? "submit-card-detailed-add-item" : undefined}
-                  disabled={draft.submitted || draft.noUpdate}
+                  disabled={isDraftLocked || draft.noUpdate}
                   onClick={() => addLineItem(contract.id, category.value)}
                 >
                   Add {category.label} Item
@@ -803,7 +933,7 @@ export function ContractUpdateCards({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          disabled={draft.submitted || draft.lineItems.length === 1}
+                          disabled={isDraftLocked || draft.lineItems.length === 1}
                           onClick={() => removeLineItem(contract.id, lineItem.id)}
                         >
                           Remove
@@ -818,7 +948,7 @@ export function ContractUpdateCards({
                             dataTour={isFirstDetailedItem ? "submit-card-detailed-status" : undefined}
                           />
                           <Select
-                            disabled={draft.submitted}
+                            disabled={isDraftLocked}
                             value={lineItem.status}
                             onValueChange={(value) =>
                               patchLineItem(contract.id, lineItem.id, { status: value as LineItemStatus })
@@ -842,7 +972,7 @@ export function ContractUpdateCards({
                           />
                           <Input
                             value={lineItem.owner}
-                            disabled={draft.submitted}
+                            disabled={isDraftLocked}
                             placeholder="Owner"
                             className="bg-white text-slate-900"
                             onChange={(event) => patchLineItem(contract.id, lineItem.id, { owner: event.target.value })}
@@ -857,7 +987,7 @@ export function ContractUpdateCards({
                           <Input
                             type="date"
                             value={lineItem.dueDate}
-                            disabled={draft.submitted}
+                            disabled={isDraftLocked}
                             className="bg-white text-slate-900"
                             onChange={(event) => patchLineItem(contract.id, lineItem.id, { dueDate: event.target.value })}
                           />
@@ -869,7 +999,7 @@ export function ContractUpdateCards({
                           >
                             <Checkbox
                               checked={lineItem.actionRequired}
-                              disabled={draft.submitted}
+                              disabled={isDraftLocked}
                               onCheckedChange={(checked) =>
                                 patchLineItem(contract.id, lineItem.id, { actionRequired: checked === true })
                               }
@@ -898,7 +1028,7 @@ export function ContractUpdateCards({
                           >
                             <Checkbox
                               checked={lineItem.carryForward}
-                              disabled={draft.submitted}
+                              disabled={isDraftLocked}
                               onCheckedChange={(checked) =>
                                 patchLineItem(contract.id, lineItem.id, { carryForward: checked === true })
                               }
@@ -934,7 +1064,7 @@ export function ContractUpdateCards({
                         value={lineItem.text}
                         placeholder={contract.currentUpdatePlaceholder}
                         className="min-h-[110px] resize-y border-slate-400 bg-white text-slate-900 shadow-sm"
-                        disabled={draft.submitted}
+                        disabled={isDraftLocked}
                         onChange={(event) => patchLineItem(contract.id, lineItem.id, { text: event.target.value })}
                         onClick={(event) => event.stopPropagation()}
                       />
@@ -973,10 +1103,16 @@ export function ContractUpdateCards({
                 checked={isEnhancedModeEnabled}
                 onCheckedChange={setIsEnhancedModeEnabled}
                 aria-label="Toggle enhanced submission workflow"
+                disabled={!submissionsEnabled}
               />
             </label>
           </div>
         </div>
+        {!submissionsEnabled && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Contributor submissions are currently turned off by the program overseer. You can still review card history.
+          </div>
+        )}
       </div>
 
       <CardGrid columns={2} gap="lg">
@@ -990,11 +1126,15 @@ export function ContractUpdateCards({
             noUpdate: false,
             submitted: false,
             submittedAt: null,
+            reviewSubmissionId: null,
+            historyEntryId: null,
           };
           const hasDraftContent =
             draft.submissionMode === "SIMPLE"
               ? Boolean(draft.simpleText.trim())
               : draft.lineItems.some((lineItem) => lineItem.text.trim());
+          const isDraftLocked = draft.submitted || !canEditDraft(draft);
+          const draftSeverity = getDraftSeverity(draft);
           const theme = cardThemes[contract.id] ?? {
             shell: "border-slate-300 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.25)]",
             panel: "border-slate-200 bg-white/90",
@@ -1015,62 +1155,91 @@ export function ContractUpdateCards({
               <CardHeader className="space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-3 flex-1">
-                    <Badge variant="secondary" className={cn("w-fit border-transparent", theme.badge)}>
-                      {contract.category}
-                    </Badge>
-                    <CardTitle>{contract.contractName}</CardTitle>
-                    {draft.submitted && (
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-                        Submitted{draft.submittedAt ? ` on ${draft.submittedAt}` : ""}
-                      </p>
-                    )}
-                    <div className="overflow-hidden rounded-xl border border-black/10 bg-white">
-                      <img
-                        src={contract.imageUrl}
-                        alt={contract.imageAlt}
-                        className={cn("h-44 w-full object-cover", draft.submitted && "grayscale")}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className={cn("w-fit border-transparent", theme.badge)}>
+                        {getCurrentTableLabel(contract.category)}
+                      </Badge>
+                      <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", statusStyles[draftSeverity])}>
+                        {draftSeverity}
+                      </span>
+                      {draft.submittedAt && (
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          Submitted {draft.submittedAt}
+                        </span>
+                      )}
                     </div>
-                    <CardDescription>Click the card background to view full submission history.</CardDescription>
+                    <CardTitle>{contract.contractName}</CardTitle>
+                    {cardDensity === "detailed" && (
+                      <>
+                        <div className="overflow-hidden rounded-xl border border-black/10 bg-white">
+                          <img
+                            src={contract.imageUrl}
+                            alt={contract.imageAlt}
+                            className={cn("h-44 w-full object-cover", draft.submitted && "grayscale")}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <CardDescription>Click the card background to view full submission history.</CardDescription>
+                      </>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedActiveContractId(contract.id);
-                    }}
-                  >
-                    Active contract
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="shrink-0"
-                    data-tour={isFirstCard ? "submit-card-history-button" : undefined}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedContractId(contract.id);
-                    }}
-                  >
-                    View history
-                  </Button>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedActiveContractId(contract.id);
+                      }}
+                    >
+                      Active contract
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="shrink-0"
+                      data-tour={isFirstCard ? "submit-card-history-button" : undefined}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedContractId(contract.id);
+                      }}
+                    >
+                      View history
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div
-                  className={cn("space-y-2 rounded-xl border p-4", theme.panel)}
-                  data-tour={isFirstCard ? "submit-card-previous-week" : undefined}
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    Previous Week Submission
-                  </p>
-                  <p className="text-sm font-medium text-slate-900">{contract.previousWeekLabel}</p>
-                  <p className="text-sm leading-6 text-slate-700">{contract.previousWeekSubmission}</p>
-                </div>
+                {cardDensity === "detailed" && (
+                  <div
+                    className={cn("space-y-2 rounded-xl border p-4", theme.panel)}
+                    data-tour={isFirstCard ? "submit-card-previous-week" : undefined}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Previous Week Submission
+                    </p>
+                    <p className="text-sm font-medium text-slate-900">{contract.previousWeekLabel}</p>
+                    <p className="text-sm leading-6 text-slate-700">{contract.previousWeekSubmission}</p>
+                  </div>
+                )}
+
+                {contract.latestFeedback?.comment ? (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">
+                      Overseer Comment
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-amber-900">
+                      {contract.latestFeedback.status === "CHANGES_REQUESTED" || contract.latestFeedback.status === "INFO_NEEDED"
+                        ? "Please review this comment and submit an updated WAR entry."
+                        : "Reviewer feedback"}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-900">
+                      {contract.latestFeedback.comment}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div
                   className="space-y-2"
@@ -1086,11 +1255,15 @@ export function ContractUpdateCards({
                   {isEnhancedModeEnabled ? (
                     <Tabs
                       value={draft.submissionMode}
-                      onValueChange={(value) =>
+                      onValueChange={(value) => {
+                        if (!submissionsEnabled) {
+                          return;
+                        }
+
                         patchSimpleDraft(contract.id, {
                           submissionMode: value as "SIMPLE" | "DETAILED",
-                        })
-                      }
+                        });
+                      }}
                     >
                       <div className="rounded-xl border border-slate-200 bg-white/70 p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1135,7 +1308,7 @@ export function ContractUpdateCards({
                         type="button"
                         variant="outline"
                         data-tour={isFirstCard ? "submit-card-carry-forward" : undefined}
-                        disabled={draft.noUpdate || draft.submissionMode !== "DETAILED"}
+                        disabled={!submissionsEnabled || draft.noUpdate || draft.submissionMode !== "DETAILED"}
                         onClick={() => carryForwardPreviousWeek(contract.id)}
                       >
                         Carry Forward Previous Week
@@ -1144,7 +1317,7 @@ export function ContractUpdateCards({
                     <Button
                       type="button"
                       variant={draft.noUpdate ? "default" : "outline"}
-                      disabled={draft.submitted}
+                      disabled={isDraftLocked}
                       data-tour={isFirstCard ? "submit-card-no-update-button" : undefined}
                       onClick={() => toggleNoUpdate(contract.id)}
                     >
@@ -1154,6 +1327,7 @@ export function ContractUpdateCards({
                       <Button
                         type="button"
                         variant="outline"
+                        disabled={!canEditDraft(draft)}
                         onClick={() => enableEditing(contract.id)}
                       >
                         Edit
@@ -1163,15 +1337,19 @@ export function ContractUpdateCards({
                         type="button"
                         data-tour={isFirstCard ? "submit-card-submit-button" : undefined}
                         onClick={() => submitContract(contract.id)}
-                        disabled={!hasDraftContent}
+                        disabled={(!submissionsEnabled && !draft.reviewSubmissionId) || !hasDraftContent}
                       >
-                        Submit
+                        {draft.reviewSubmissionId ? "Update" : "Submit"}
                       </Button>
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
-                    {draft.submitted
+                    {!submissionsEnabled
+                      ? "Submission drafting is locked by settings. Contributors can still review contract history and prior context."
+                      : draft.submitted
                       ? "Submitted cards are locked until Edit is selected."
+                      : !submissionWindowOpen && !draft.reopenedAfterDeadline && !draft.reviewSubmissionId
+                        ? "Submissions are only open on the 1st and 3rd Tuesday from 8:00 AM to 5:00 PM unless reopened by reviewer comment."
                       : isEnhancedModeEnabled
                         ? draft.submissionMode === "SIMPLE"
                           ? "Simple mode keeps the submission lightweight with a single text field and severity tag."

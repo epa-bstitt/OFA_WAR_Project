@@ -1,6 +1,8 @@
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,8 +31,63 @@ const roleLabels: Record<string, string> = {
   ADMINISTRATOR: "Administrator",
 };
 
+const demoUsers: Record<string, { name: string; email: string; role: string }> = {
+  contributor: {
+    name: "Demo Contributor",
+    email: "contributor@demo.epa.gov",
+    role: "CONTRIBUTOR",
+  },
+  aggregator: {
+    name: "Demo Aggregator",
+    email: "aggregator@demo.epa.gov",
+    role: "AGGREGATOR",
+  },
+  overseer: {
+    name: "Demo Program Overseer",
+    email: "overseer@demo.epa.gov",
+    role: "PROGRAM_OVERSEER",
+  },
+  admin: {
+    name: "Demo Administrator",
+    email: "admin@demo.epa.gov",
+    role: "ADMINISTRATOR",
+  },
+};
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export function UserMenu() {
+  const router = useRouter();
   const { data: session, status } = useSession();
+  const [demoRole, setDemoRole] = useState<string>("contributor");
+  const [isMockMode, setIsMockMode] = useState(false);
+
+  useEffect(() => {
+    const cookieRole = getCookie("admin-mock-role")?.toLowerCase();
+    setIsMockMode(getCookie("admin-mock-mode") === "true");
+    if (cookieRole && demoUsers[cookieRole]) {
+      setDemoRole(cookieRole);
+    }
+  }, []);
+
+  function clearCookie(name: string) {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+  }
+
+  async function handleSwitchRole() {
+    await signOut({ redirect: false });
+    clearCookie("admin-mock-role");
+    clearCookie("admin-mock-mode");
+    router.push("/login");
+    router.refresh();
+  }
 
   if (status === "loading") {
     return (
@@ -41,11 +98,12 @@ export function UserMenu() {
     );
   }
 
-  if (!session?.user) {
+  const user = isMockMode ? demoUsers[demoRole] : (session?.user ?? demoUsers[demoRole]);
+
+  if (!user) {
     return null;
   }
 
-  const user = session.user;
   const role = user.role as string;
   const initials = user.name
     ?.split(" ")
@@ -94,9 +152,9 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-red-600 focus:text-red-600 cursor-pointer"
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={handleSwitchRole}
         >
-          Sign out
+          Switch Role
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { getPendingSubmissions } from "@/app/actions/review";
 import ReviewDetailClient from "@/components/features/review/ReviewDetailClient";
+import { getStoredSettings } from "@/app/api/admin/settings/store";
+import { getOverseerSettings } from "@/lib/overseer-settings";
 
 interface ReviewDetailPageProps {
   params: { id: string };
@@ -30,12 +32,18 @@ export default async function ReviewDetailPage({ params }: ReviewDetailPageProps
     redirect("/unauthorized");
   }
 
+  const storedSettings = await getStoredSettings();
+  const aggregatorAccess = getOverseerSettings(storedSettings).aggregatorAccess;
+  if (session.user.role === "AGGREGATOR" && !aggregatorAccess.reviewDashboardEnabled) {
+    redirect("/review");
+  }
+
   // Fetch submission with user info
   const submission = await prisma.submission.findFirst({
     where: {
       id: params.id,
       deletedAt: null,
-      status: { in: ["SUBMITTED", "IN_REVIEW"] },
+      status: { in: ["SUBMITTED", "IN_REVIEW", "INFO_NEEDED"] },
     },
     include: {
       user: {
@@ -57,7 +65,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailPageProps
   }
 
   // Get queue info for navigation
-  const queueResult = await getPendingSubmissions();
+  const queueResult = await getPendingSubmissions({ statuses: ["SUBMITTED", "INFO_NEEDED"] });
   let nextId: string | undefined;
   let prevId: string | undefined;
   let currentPosition = 1;

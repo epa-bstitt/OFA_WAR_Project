@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { getPromptById } from "@/app/actions/prompts";
 import EditPromptClient from "@/components/features/prompts/EditPromptClient";
+import { getStoredSettings } from "@/app/api/admin/settings/store";
+import { getOverseerSettings } from "@/lib/overseer-settings";
 
 interface EditPromptPageProps {
   params: { id: string };
@@ -27,6 +29,12 @@ export default async function EditPromptPage({ params }: EditPromptPageProps) {
   const hasPermission = await hasMinimumRoleLevel("AGGREGATOR");
   if (!hasPermission) {
     redirect("/unauthorized");
+  }
+
+  const storedSettings = await getStoredSettings();
+  const aggregatorAccess = getOverseerSettings(storedSettings).aggregatorAccess;
+  if (session.user.role === "AGGREGATOR" && !aggregatorAccess.promptTemplateManagementEnabled) {
+    redirect("/prompts");
   }
 
   // Fetch prompt

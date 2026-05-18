@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const WALKTHROUGH_DISMISSED_KEY = "war-submit-card-walkthrough-dismissed";
+
 export interface CardWalkthroughStep {
   id: string;
   selector: string;
@@ -45,8 +47,22 @@ export function CardWalkthrough({ steps, open, onClose }: CardWalkthroughProps) 
       return;
     }
 
+    const dismissed = window.localStorage.getItem(WALKTHROUGH_DISMISSED_KEY) === "true";
+    setRememberDismissal(dismissed);
     setCurrentStepIndex(0);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (rememberDismissal) {
+      window.localStorage.setItem(WALKTHROUGH_DISMISSED_KEY, "true");
+    } else {
+      window.localStorage.removeItem(WALKTHROUGH_DISMISSED_KEY);
+    }
+  }, [rememberDismissal, open]);
 
   useEffect(() => {
     if (!open || !currentStep) {

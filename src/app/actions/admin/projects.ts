@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hasRequiredRole, hasMinimumRole } from "@/lib/auth";
+import { logAuditEvent } from "@/lib/audit/logger";
 import { z } from "zod";
 
 // Types
@@ -357,6 +358,24 @@ export async function assignUserToProject(
       },
     });
 
+    const project = await prisma.project.findUnique({
+      where: { id: validated.projectId },
+      select: { name: true },
+    });
+
+    await logAuditEvent({
+      action: "USER_ASSIGNED_TO_PROJECT",
+      userId: authCheck.userId,
+      resourceType: "user",
+      resourceId: validated.userId,
+      metadata: {
+        targetUserEmail: assignment.user?.email,
+        targetUserName: assignment.user?.name,
+        projectName: project?.name,
+        componentName: assignment.component?.name,
+      },
+    });
+
     revalidatePath("/admin/projects");
     return { success: true, assignment };
   } catch (error) {
@@ -380,9 +399,47 @@ export async function removeUserAssignment(
       return { success: false, error: authCheck.error! };
     }
 
+    const assignment = await prisma.projectAssignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        project: {
+          select: {
+            name: true,
+          },
+        },
+        component: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
     await prisma.projectAssignment.delete({
       where: { id: assignmentId },
     });
+
+    if (assignment) {
+      await logAuditEvent({
+        action: "USER_UNASSIGNED_FROM_PROJECT",
+        userId: authCheck.userId,
+        resourceType: "user",
+        resourceId: assignment.userId,
+        metadata: {
+          targetUserEmail: assignment.user?.email,
+          targetUserName: assignment.user?.name,
+          projectName: assignment.project?.name,
+          componentName: assignment.component?.name,
+        },
+      });
+    }
 
     revalidatePath("/admin/projects");
     return { success: true };

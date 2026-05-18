@@ -1,10 +1,8 @@
 import NextAuth from "next-auth";
 import AzureADB2C from "next-auth/providers/azure-ad-b2c";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import type { Adapter } from "@auth/core/adapters";
 import type { Session } from "next-auth";
-import { prisma } from "./db";
+import { cookies } from "next/headers";
 
 const authSecret =
   process.env.AUTH_SECRET ??
@@ -19,16 +17,47 @@ export const isAzureAdB2CConfigured = Boolean(
     process.env.AZURE_AD_B2C_TENANT_NAME
 );
 
-const fallbackSession: Session = {
-  user: {
+const demoUsers: Record<string, { id: string; name: string; email: string; role: string }> = {
+  contributor: {
+    id: "demo-contributor",
+    name: "Demo Contributor",
+    email: "contributor@demo.epa.gov",
+    role: "CONTRIBUTOR",
+  },
+  aggregator: {
+    id: "demo-aggregator",
+    name: "Demo Aggregator",
+    email: "aggregator@demo.epa.gov",
+    role: "AGGREGATOR",
+  },
+  overseer: {
+    id: "demo-overseer",
+    name: "Demo Program Overseer",
+    email: "overseer@demo.epa.gov",
+    role: "PROGRAM_OVERSEER",
+  },
+  admin: {
     id: "demo-admin",
     name: "Demo Administrator",
     email: "admin@demo.epa.gov",
     role: "ADMINISTRATOR",
-    azureAdId: "demo-admin",
   },
-  expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
 };
+
+function getDemoSession(roleKey: string): Session {
+  const user = demoUsers[roleKey] ?? demoUsers.contributor;
+
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      azureAdId: user.id,
+    },
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
 
 const {
   handlers,
@@ -36,8 +65,6 @@ const {
   signIn,
   signOut,
 } = NextAuth({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adapter: PrismaAdapter(prisma) as Adapter,
   secret: authSecret,
   providers: [
     // Demo credentials provider for testing
@@ -48,34 +75,6 @@ const {
         role: { label: "Role", type: "text" },
       },
       async authorize(credentials) {
-        // Demo users for testing
-        const demoUsers: Record<string, { id: string; name: string; email: string; role: string }> = {
-          contributor: {
-            id: "demo-contributor",
-            name: "Demo Contributor",
-            email: "contributor@demo.epa.gov",
-            role: "CONTRIBUTOR",
-          },
-          aggregator: {
-            id: "demo-aggregator",
-            name: "Demo Aggregator",
-            email: "aggregator@demo.epa.gov",
-            role: "AGGREGATOR",
-          },
-          overseer: {
-            id: "demo-overseer",
-            name: "Demo Program Overseer",
-            email: "overseer@demo.epa.gov",
-            role: "PROGRAM_OVERSEER",
-          },
-          admin: {
-            id: "demo-admin",
-            name: "Demo Administrator",
-            email: "admin@demo.epa.gov",
-            role: "ADMINISTRATOR",
-          },
-        };
-
         const role = credentials?.role?.toLowerCase() || "contributor";
         const user = demoUsers[role];
 
@@ -148,11 +147,26 @@ export const { GET, POST } = handlers;
 export async function auth(...args: Parameters<typeof baseAuth>) {
   const session = await baseAuth(...args);
 
-  if (args.length > 0) {
+  if (args.length === 0) {
+    const cookieStore = cookies();
+    const isMockMode = cookieStore.get("admin-mock-mode")?.value === "true";
+
+    if (isMockMode) {
+      const selectedRole =
+        cookieStore.get("admin-mock-role")?.value?.toLowerCase() || "contributor";
+      return getDemoSession(selectedRole);
+    }
+  }
+
+  if (session) {
     return session;
   }
 
-  return session ?? fallbackSession;
+  if (args.length > 0) {
+    return null;
+  }
+
+  return getDemoSession("contributor");
 }
 
 // Role-based access control helper

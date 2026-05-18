@@ -102,12 +102,12 @@ export async function batchApprove(
           userId: session.user.id,
           resourceType: "submission",
           resourceId: submissionIds[0],
-          metadata: {
+          metadata: JSON.stringify({
             submissionIds,
             count: submissionIds.length,
             notes,
             approvedAt: new Date().toISOString(),
-          },
+          }),
         },
       });
 
@@ -229,12 +229,12 @@ export async function batchReject(
           userId: session.user.id,
           resourceType: "submission",
           resourceId: submissionIds[0],
-          metadata: {
+          metadata: JSON.stringify({
             submissionIds,
             count: submissionIds.length,
             reason,
             rejectedAt: new Date().toISOString(),
-          },
+          }),
         },
       });
 
@@ -321,12 +321,12 @@ export async function undoBatchAction(
           userId: session.user.id,
           resourceType: "submission",
           resourceId: action.submissionIds[0],
-          metadata: {
+          metadata: JSON.stringify({
             originalAction: action.action,
             actionId,
             submissionIds: action.submissionIds,
             undoneAt: new Date().toISOString(),
-          },
+          }),
         },
       });
     });

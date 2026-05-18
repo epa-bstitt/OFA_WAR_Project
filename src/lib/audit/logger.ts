@@ -10,9 +10,14 @@ import { maskPII, type PIIData } from "./pii";
 export type AuditAction =
   | "USER_SIGNIN"
   | "USER_SIGNOUT"
+  | "USER_CREATED"
   | "USER_ROLE_CHANGED"
   | "USER_DISABLED"
   | "USER_ENABLED"
+  | "USER_ASSIGNED_TO_PROJECT"
+  | "USER_UNASSIGNED_FROM_PROJECT"
+  | "CONTRIBUTOR_SETTINGS_UPDATED"
+  | "AGGREGATOR_SETTINGS_UPDATED"
   | "SUBMISSION_CREATED"
   | "SUBMISSION_UPDATED"
   | "SUBMISSION_DELETED"
@@ -55,6 +60,18 @@ export interface AuditEvent {
   userAgent?: string;
 }
 
+function serializeMetadata(metadata?: Record<string, unknown>): string | null {
+  if (!metadata) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(metadata);
+  } catch {
+    return "{}";
+  }
+}
+
 /**
  * Log an audit event
  * This is the ONLY way to create audit log entries
@@ -79,7 +96,7 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
         userId: event.userId,
         resourceType: event.resourceType,
         resourceId: event.resourceId,
-        metadata: sanitizedMetadata,
+        metadata: serializeMetadata(sanitizedMetadata as Record<string, unknown>),
         ipAddress: event.ipAddress,
         userAgent: sanitizedUserAgent,
         // createdAt is auto-set by Prisma
@@ -111,7 +128,9 @@ export async function logAuditEvents(events: AuditEvent[]): Promise<void> {
       userId: event.userId,
       resourceType: event.resourceType,
       resourceId: event.resourceId,
-      metadata: event.metadata ? maskPII(event.metadata as PIIData) : null,
+      metadata: serializeMetadata(
+        event.metadata ? (maskPII(event.metadata as PIIData) as Record<string, unknown>) : undefined
+      ),
       ipAddress: event.ipAddress,
       userAgent: event.userAgent ? sanitizeUserAgent(event.userAgent) : null,
     }));

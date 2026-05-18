@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, hasMinimumRole } from "@/lib/auth";
-import { deleteContract, getMockContractById, updateContract } from "@/lib/mock-contracts";
+import { deleteContractInDb, getContractByIdFromDb, updateContractInDb } from "@/lib/contracts-db";
+import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET(_: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const contract = getMockContractById(params.id);
+  const contract = await getContractByIdFromDb(params.id);
   if (!contract) {
     return NextResponse.json({ error: "Contract not found" }, { status: 404 });
   }
@@ -42,7 +43,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Contract name is required." }, { status: 400 });
   }
 
-  const updated = updateContract(params.id, {
+  const updated = await updateContractInDb(params.id, {
     contractName,
     cor: String(body?.cor ?? ""),
     contractNumber: String(body?.contractNumber ?? ""),
@@ -53,11 +54,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     cs: String(body?.cs ?? ""),
     orderNumber: String(body?.orderNumber ?? ""),
     category: String(body?.category ?? "Contract"),
+    assigneeIds: Array.isArray(body?.assigneeIds)
+      ? body.assigneeIds.map((value: unknown) => String(value))
+      : undefined,
   });
 
   if (!updated) {
     return NextResponse.json({ error: "Contract not found" }, { status: 404 });
   }
+
+  revalidatePath("/settings");
 
   return NextResponse.json({ contract: updated });
 }
@@ -74,11 +80,13 @@ export async function DELETE(_: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const deleted = deleteContract(params.id);
+  const deleted = await deleteContractInDb(params.id);
 
   if (!deleted) {
     return NextResponse.json({ error: "Contract not found" }, { status: 404 });
   }
+
+  revalidatePath("/settings");
 
   return NextResponse.json({ success: true });
 }

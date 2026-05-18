@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,24 +58,20 @@ export default function LoginPage() {
     setIsLoading(role);
     setError(null);
 
+    const destination =
+      role === "overseer" ? "/approve" : role === "aggregator" ? "/review" : "/dashboard";
+
     try {
-      // Ensure mock mode is enabled
       setCookie("admin-mock-mode", "true");
-      
-      const result = await signIn("demo", {
+      setCookie("admin-mock-role", role);
+
+      await signIn("demo", {
         role,
-        callbackUrl: "/dashboard",
         redirect: false,
       });
 
-      if (result?.ok) {
-        // Small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 100));
-        router.push("/dashboard");
-        router.refresh();
-      } else {
-        setError("Demo login failed. Please try again.");
-      }
+      router.push(destination);
+      router.refresh();
     } catch (err) {
       console.error("Demo login error:", err);
       setError("An error occurred during login.");

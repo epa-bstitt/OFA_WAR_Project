@@ -3,6 +3,50 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { sendWorkflowEmail } from "@/lib/notifications/email";
+// import { getContractsOutlook, MOCK_CONTRACT_ASSIGNEES } from "@/lib/mock-contracts";
+import { getCurrentSubmissionPeriod, getRecentSubmissionPeriods } from "@/lib/submission-periods";
+// import { isMockModeEnabled } from "@/lib/admin/mock-mode-server";
+import { logWorkflowEvent } from "@/lib/audit/logger";
+
+function serializeAuditMetadata(metadata: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(metadata);
+  } catch {
+    return "{}";
+  }
+}
+
+async function ensureReviewerUserRecord(sessionUser: {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  role?: string | null;
+}) {
+  const normalizedLocalPart = sessionUser.id
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .slice(0, 48);
+
+  const fallbackEmail = `${normalizedLocalPart || "reviewer"}@local.demo`;
+  const fallbackAzureAdId = `local-${sessionUser.id}`;
+
+  await prisma.user.upsert({
+    where: { id: sessionUser.id },
+    update: {
+      isActive: true,
+      updatedAt: new Date(),
+    },
+    create: {
+      id: sessionUser.id,
+      email: sessionUser.email || fallbackEmail,
+      name: sessionUser.name || null,
+      azureAdId: fallbackAzureAdId,
+      role: sessionUser.role || "PROGRAM_OVERSEER",
+      isActive: true,
+    },
+  });
+}
 
 // Types matching Prisma schema
 export interface Submission {
@@ -11,7 +55,7 @@ export interface Submission {
   weekOf: Date;
   rawText: string;
   terseVersion?: string | null;
-  status: "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "PUBLISHED";
+  status: string;
   isAiGenerated: boolean;
   aiConfidence?: number | null;
   createdAt: Date;
@@ -35,15 +79,269 @@ export interface User {
   email: string | null;
 }
 
+// Update SubmissionWithUser type to enforce status as a specific enum
 export type SubmissionWithUser = Submission & {
-  user: User;
-  reviews?: Review[];
+  user: {
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
+    name: string | null;
+    email: string | null;
+    azureAdId: string;
+    role: string;
+    isActive: boolean;
+    teamsNotificationsEnabled: boolean;
+    teamsConversationId: string | null;
+    teamsConversationReference: string | null;
+  };
+  reviews: Review[];
 };
+
+// Ensure status property uses Prisma schema enum values
+const validStatuses = ["SUBMITTED", "IN_REVIEW", "APPROVED", "PUBLISHED", "INFO_NEEDED", "REJECTED"] as const;
+export type Status = typeof validStatuses[number];
 
 export interface ReviewFilters {
   contributorId?: string;
   weekOf?: Date;
   search?: string;
+  statuses?: Array<"SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED">;
+}
+
+type StaffSubmissionStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+
+export interface BiWeeklyStaffSubmissionCard {
+  userId: string;
+  name: string;
+  email: string;
+  profileImageUrl: string;
+  status: StaffSubmissionStatus;
+  submittedProjects: string[];
+  remainingProjects: string[];
+  totalProjects: number;
+  submittedCount: number;
+}
+
+export interface BiWeeklyStaffSubmissionPeriod {
+  periodId: string;
+  label: string;
+  deadline: Date;
+  cards: BiWeeklyStaffSubmissionCard[];
+}
+
+const PROFILE_IMAGE_POOL = [
+  "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=320&q=80",
+  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=320&q=80",
+  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=320&q=80",
+  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=320&q=80",
+  "https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=320&q=80",
+  "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=320",
+  "https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=320",
+  "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=320",
+  "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=320",
+  "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=320",
+];
+
+function getProfileImageForUser(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i += 1) {
+    hash = (hash + userId.charCodeAt(i) * (i + 1)) % PROFILE_IMAGE_POOL.length;
+  }
+  return PROFILE_IMAGE_POOL[hash];
+}
+
+function isLegacyContractProject(description: string | null | undefined): boolean {
+  if (!description) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(description) as { category?: string };
+    return parsed.category === "Legacy Contracts";
+  } catch {
+    return false;
+  }
+}
+
+// function getMockBiWeeklyPeriods(now: Date): BiWeeklyStaffSubmissionPeriod[] { /* removed for real workflow */ }
+
+/**
+ * Server Action: Get contributor submission status cards by bi-week period.
+ */
+export async function getBiWeeklyStaffSubmissionStatus(): Promise<
+  | { success: true; periods: BiWeeklyStaffSubmissionPeriod[] }
+  | { success: false; error: string }
+> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const ROLE_HIERARCHY: Record<string, number> = {
+      ADMINISTRATOR: 4,
+      PROGRAM_OVERSEER: 3,
+      AGGREGATOR: 2,
+      CONTRIBUTOR: 1,
+    };
+
+    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
+    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+      return { success: false, error: "Insufficient permissions" };
+    }
+
+    const now = new Date();
+    const currentPeriod = getCurrentSubmissionPeriod(now);
+    const periodsToLoad = getRecentSubmissionPeriods(now, 8);
+
+    const contributors = await prisma.user.findMany({
+      where: {
+        role: "CONTRIBUTOR",
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    const assignments = await prisma.projectAssignment.findMany({
+      where: {
+        userId: { in: contributors.map((user) => user.id) },
+        project: {
+          status: { not: "COMPLETED" },
+        },
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+      },
+    });
+
+    if (contributors.length === 0 || assignments.length === 0) {
+      return { success: false, error: "No contributors or assignments found." };
+    }
+
+    const assignmentMap = new Map<
+      string,
+      Array<{ projectId: string; projectName: string }>
+    >();
+
+    for (const assignment of assignments) {
+      if (isLegacyContractProject(assignment.project.description)) {
+        continue;
+      }
+
+      const current = assignmentMap.get(assignment.userId) || [];
+      if (!current.some((item) => item.projectId === assignment.projectId)) {
+        current.push({ projectId: assignment.projectId, projectName: assignment.project.name });
+      }
+      assignmentMap.set(assignment.userId, current);
+    }
+
+    const periods: BiWeeklyStaffSubmissionPeriod[] = [];
+
+    for (const period of periodsToLoad) {
+      const submissions = await prisma.submission.findMany({
+        where: {
+          deletedAt: null,
+          weekOf: {
+            gte: period.start,
+            lte: period.end,
+          },
+          status: {
+            in: ["SUBMITTED", "IN_REVIEW", "APPROVED", "PUBLISHED"],
+          },
+        },
+        select: {
+          userId: true,
+          projectId: true,
+        },
+      });
+
+      const submissionMap = new Map<string, { projectIds: Set<string>; hasGenericSubmission: boolean }>();
+
+      for (const submission of submissions) {
+        const current = submissionMap.get(submission.userId) || {
+          projectIds: new Set<string>(),
+          hasGenericSubmission: false,
+        };
+
+        if (submission.projectId) {
+          current.projectIds.add(submission.projectId);
+        } else {
+          current.hasGenericSubmission = true;
+        }
+
+        submissionMap.set(submission.userId, current);
+      }
+
+      const cards: BiWeeklyStaffSubmissionCard[] = contributors.map((user) => {
+        const assignedProjects = assignmentMap.get(user.id) || [];
+        const submissionState = submissionMap.get(user.id) || {
+          projectIds: new Set<string>(),
+          hasGenericSubmission: false,
+        };
+
+        const submittedProjects = submissionState.hasGenericSubmission
+          ? assignedProjects.map((project) => project.projectName)
+          : assignedProjects
+              .filter((project) => submissionState.projectIds.has(project.projectId))
+              .map((project) => project.projectName);
+
+        const remainingProjects = submissionState.hasGenericSubmission
+          ? []
+          : assignedProjects
+              .filter((project) => !submissionState.projectIds.has(project.projectId))
+              .map((project) => project.projectName);
+
+        const submittedCount = submittedProjects.length;
+        const totalProjects = assignedProjects.length;
+
+        let status: StaffSubmissionStatus = "NOT_STARTED";
+        if (submissionState.hasGenericSubmission) {
+          status = "COMPLETED";
+        } else if (totalProjects > 0 && remainingProjects.length === 0 && submittedCount > 0) {
+          status = "COMPLETED";
+        } else if (submittedCount > 0) {
+          status = "IN_PROGRESS";
+        }
+
+        return {
+          userId: user.id,
+          name: user.name || user.email,
+          email: user.email,
+          profileImageUrl: getProfileImageForUser(user.id),
+          status,
+          submittedProjects,
+          remainingProjects,
+          totalProjects,
+          submittedCount,
+        };
+      });
+
+      periods.push({
+        periodId: period.id,
+        label: `Bi-Weekly ${period.label}${period.id === currentPeriod.id ? " (Current)" : ""}`,
+        deadline: period.deadline,
+        cards,
+      });
+    }
+
+    return { success: true, periods };
+  } catch (error) {
+    console.error("Error fetching bi-weekly staff status:", error);
+    return { success: false, error: "Error fetching bi-weekly staff status and no mock data fallback." };
+  }
 }
 
 /**
@@ -74,7 +372,9 @@ export async function getPendingSubmissions(
     }
 
     const where: Record<string, unknown> = {
-      status: "SUBMITTED",
+      status: {
+        in: filters?.statuses && filters.statuses.length > 0 ? filters.statuses : ["SUBMITTED"],
+      },
       deletedAt: null,
     };
 
@@ -94,7 +394,7 @@ export async function getPendingSubmissions(
 
     const submissions = await prisma.submission.findMany({
       where,
-      orderBy: { createdAt: "asc" },
+      orderBy: { updatedAt: "desc" },
       include: {
         user: true,
         reviews: {
@@ -155,7 +455,7 @@ export async function getReviewStats(): Promise<
       // Pending submissions
       prisma.submission.count({
         where: {
-          status: "SUBMITTED",
+          status: { in: ["SUBMITTED", "INFO_NEEDED"] },
           deletedAt: null,
         },
       }),
@@ -171,7 +471,7 @@ export async function getReviewStats(): Promise<
       // Overdue submissions (>7 days old, still pending)
       prisma.submission.count({
         where: {
-          status: "SUBMITTED",
+          status: { in: ["SUBMITTED", "INFO_NEEDED"] },
           deletedAt: null,
           createdAt: { lt: weekAgo },
         },
@@ -214,69 +514,64 @@ export async function createReview(
     if (!session?.user?.id) {
       return { success: false, error: "Not authenticated" };
     }
-    
+
     const ROLE_HIERARCHY: Record<string, number> = {
       ADMINISTRATOR: 4,
       PROGRAM_OVERSEER: 3,
       AGGREGATOR: 2,
       CONTRIBUTOR: 1,
     };
-    
+
     const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
     if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
       return { success: false, error: "Insufficient permissions" };
     }
 
-    // Verify submission exists and is in reviewable state
     const submission = await prisma.submission.findFirst({
       where: {
         id: submissionId,
         deletedAt: null,
-        status: { in: ["SUBMITTED", "IN_REVIEW"] },
+        status: { in: ["SUBMITTED", "IN_REVIEW", "INFO_NEEDED"] },
       },
     });
 
     if (!submission) {
-      return { success: false, error: "Submission not found or not reviewable" };
+      return { success: false, error: "Submission not found or not in a reviewable state." };
     }
-
-    // Create review record
-    await prisma.review.create({
-      data: {
-        submissionId,
-        reviewerId: session.user.id,
-        status,
-        comment,
-      },
-    });
 
     // Update submission status
     await prisma.submission.update({
       where: { id: submissionId },
-      data: {
-        status: status === "APPROVED" ? "APPROVED" : status === "REJECTED" ? "REJECTED" : "IN_REVIEW",
+      data: { status },
+    });
+
+    // Update workflow state
+    await prisma.workflowState.upsert({
+      where: { submissionId },
+      update: { currentStage: status },
+      create: {
+        submissionId,
+        currentStage: status,
         updatedAt: new Date(),
       },
     });
 
-    // Log audit event
-    await prisma.auditLog.create({
-      data: {
-        action: "REVIEW_CREATED",
-        userId: session.user.id,
-        resourceType: "review",
-        resourceId: submissionId,
-        metadata: { status, comment },
-      },
-    });
-
-    revalidatePath("/review");
-    revalidatePath("/submissions");
+    // Log workflow event
+    await logWorkflowEvent(
+      status === "APPROVED"
+        ? "SUBMISSION_APPROVED"
+        : status === "REJECTED"
+        ? "SUBMISSION_REJECTED"
+        : "SUBMISSION_PUBLISHED", // Adjusted to use a valid action type
+      session.user.id,
+      submissionId,
+      { approverName: session.user.name, rejectionReason: comment }
+    );
 
     return { success: true };
   } catch (error) {
     console.error("Error creating review:", error);
-    return { success: false, error: "Failed to create review" };
+    return { success: false, error: "Failed to create review." };
   }
 }
 
@@ -346,7 +641,7 @@ export async function approveSubmission(
         userId: session.user.id,
         resourceType: "submission",
         resourceId: submissionId,
-        metadata: { terseTextLength: terseText.length, comment },
+        metadata: serializeAuditMetadata({ terseTextLength: terseText.length, comment }),
       },
     });
 
@@ -424,7 +719,7 @@ export async function rejectSubmission(
         userId: session.user.id,
         resourceType: "submission",
         resourceId: submissionId,
-        metadata: { reason },
+        metadata: serializeAuditMetadata({ reason }),
       },
     });
 

@@ -6,16 +6,17 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { WarEntriesList } from "@/components/features/contracts/WarEntriesList";
 import { auth } from "@/lib/auth";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
-import { getMockContractById, getWarEntriesForContract } from "@/lib/mock-contracts";
+import { getContractByIdFromDb, getWarEntriesForContractFromDb } from "@/lib/contracts-db";
 
 interface ContractWarEntriesPageProps {
   params: { id: string };
 }
 
 export async function generateMetadata({ params }: ContractWarEntriesPageProps): Promise<Metadata> {
-  const contract = getMockContractById(params.id);
+  const contract = await getContractByIdFromDb(params.id);
 
   return {
     title: contract ? `${contract.contractName} WAR Entries` : "Contract WAR Entries",
@@ -36,13 +37,13 @@ export default async function ContractWarEntriesPage({ params }: ContractWarEntr
     redirect("/dashboard");
   }
 
-  const contract = getMockContractById(params.id);
+  const contract = await getContractByIdFromDb(params.id);
 
   if (!contract) {
     notFound();
   }
 
-  const warEntries = getWarEntriesForContract(params.id);
+  const warEntries = await getWarEntriesForContractFromDb(params.id);
 
   return (
     <div className="space-y-6">
@@ -50,10 +51,10 @@ export default async function ContractWarEntriesPage({ params }: ContractWarEntr
         title={`${contract.contractName} WAR Entries`}
         description="All WAR updates submitted for this contract."
       >
-        <Link href="/contracts/outlook">
+        <Link href="/contracts">
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Outlook
+            Back to Contract Management
           </Button>
         </Link>
       </PageHeader>
@@ -65,22 +66,7 @@ export default async function ContractWarEntriesPage({ params }: ContractWarEntr
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {warEntries.map((entry) => (
-            <Card key={entry.id}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base">Week of {entry.weekOf}</CardTitle>
-                  <Badge variant="secondary">{entry.status.replace("_", " ")}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-xs text-slate-500">Submitted: {entry.submittedAt}</p>
-                <p className="text-sm leading-6 text-slate-700">{entry.summary}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <WarEntriesList entries={warEntries} />
       )}
     </div>
   );

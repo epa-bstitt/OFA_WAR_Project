@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -12,13 +12,48 @@ import { EPALogo } from "./EPALogo";
 import { UserMenu } from "./UserMenu";
 import { NAV_ITEMS, Role, hasMinimumRole } from "@/config/navigation";
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function mapDemoRoleToAppRole(role: string | null): Role {
+  if (role === "admin") {
+    return "ADMINISTRATOR";
+  }
+
+  if (role === "overseer") {
+    return "PROGRAM_OVERSEER";
+  }
+
+  if (role === "aggregator") {
+    return "AGGREGATOR";
+  }
+
+  return "CONTRIBUTOR";
+}
+
 export function Header() {
   const { data: session } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [demoRole, setDemoRole] = useState<string | null>(null);
+  const [isMockMode, setIsMockMode] = useState(false);
   const pathname = usePathname();
 
-  const userRole = (session?.user?.role as Role) || "CONTRIBUTOR";
+  useEffect(() => {
+    setDemoRole(getCookie("admin-mock-role"));
+    setIsMockMode(getCookie("admin-mock-mode") === "true");
+  }, [pathname]);
+
+  const userRole = isMockMode
+    ? mapDemoRoleToAppRole(demoRole)
+    : ((session?.user?.role as Role) || mapDemoRoleToAppRole(demoRole));
   const navItems = NAV_ITEMS[userRole] || [];
+  const hasUserContext = Boolean(session?.user) || Boolean(demoRole);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white">
@@ -50,7 +85,7 @@ export function Header() {
 
         {/* Right Side */}
         <div className="flex items-center gap-4">
-          {session?.user ? (
+          {hasUserContext ? (
             <UserMenu />
           ) : (
             <Link href="/login">

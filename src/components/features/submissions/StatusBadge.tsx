@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-type SubmissionStatus = "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "PUBLISHED";
+type SubmissionStatus = "SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED";
 
 interface StatusBadgeProps {
   status: SubmissionStatus;
@@ -18,6 +18,10 @@ const statusConfig: Record<SubmissionStatus, { label: string; color: string }> =
   IN_REVIEW: {
     label: "In Review",
     color: "bg-yellow-100 text-yellow-800",
+  },
+  INFO_NEEDED: {
+    label: "Info Needed",
+    color: "bg-amber-100 text-amber-800",
   },
   APPROVED: {
     label: "Approved",

@@ -2,10 +2,9 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { CardGrid } from "@/components/shared/CardGrid";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { getMySubmissions } from "@/app/actions/submissions";
-import { SubmissionCard } from "@/components/features/submissions/SubmissionCard";
+import { SubmissionsTabs } from "@/components/features/submissions/SubmissionsTabs";
 import { Plus } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -48,11 +47,7 @@ export default async function SubmissionsPage() {
           </Link>
         </div>
       ) : (
-        <CardGrid columns={2}>
-          {submissions.map((submission) => (
-            <SubmissionCard key={submission.id} submission={submission} />
-          ))}
-        </CardGrid>
+        <SubmissionsTabs submissions={submissions} />
       )}
     </div>
   );

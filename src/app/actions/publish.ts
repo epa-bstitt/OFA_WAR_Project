@@ -185,14 +185,14 @@ export async function publishToOneNote(
         userId: session.user.id,
         resourceType: "publication",
         resourceId: "batch",
-        metadata: {
+        metadata: JSON.stringify({
           submissionIds,
           sectionId,
           successCount,
           failureCount,
           pageUrls,
           publishedAt: new Date().toISOString(),
-        },
+        }),
       },
     });
 

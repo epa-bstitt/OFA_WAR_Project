@@ -1,15 +1,10 @@
 import {
   LayoutDashboard,
-  FileText,
-  List,
   Inbox,
   Settings,
   CheckCircle,
-  BarChart,
   Users,
   FileSearch,
-  Contact,
-  Table2,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -24,30 +19,14 @@ export type Role = "CONTRIBUTOR" | "AGGREGATOR" | "PROGRAM_OVERSEER" | "ADMINIST
 export const NAV_ITEMS: Record<Role, NavItem[]> = {
   CONTRIBUTOR: [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Submit WAR", href: "/submit", icon: FileText },
-    { label: "My Submissions", href: "/submissions", icon: List },
   ],
   AGGREGATOR: [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "WAR Review", href: "/review", icon: Inbox },
-    { label: "Contracts", href: "/contracts", icon: Contact },
-    {
-      label: "Current and Active Contracts/Purchase Order Outlook",
-      href: "/contracts/outlook",
-      icon: Table2,
-    },
+    { label: "Dashboard", href: "/review", icon: Inbox },
     { label: "Prompts", href: "/prompts", icon: Settings },
   ],
   PROGRAM_OVERSEER: [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "WAR Review", href: "/approve", icon: CheckCircle },
-    { label: "Contracts", href: "/contracts", icon: Contact },
-    {
-      label: "Current and Active Contracts/Purchase Order Outlook",
-      href: "/contracts/outlook",
-      icon: Table2,
-    },
-    { label: "Analytics", href: "/analytics", icon: BarChart },
+    { label: "Settings", href: "/settings", icon: Settings },
   ],
   ADMINISTRATOR: [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },

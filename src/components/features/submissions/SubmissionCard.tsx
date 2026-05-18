@@ -20,7 +20,8 @@ interface SubmissionCardProps {
 }
 
 export function SubmissionCard({ submission, onDelete }: SubmissionCardProps) {
-  const canEdit = submission.status === "SUBMITTED";
+  const latestReviewStatus = submission.reviews?.[0]?.status;
+  const canEdit = latestReviewStatus === "CHANGES_REQUESTED" || submission.status === "INFO_NEEDED";
   const canDelete = submission.status === "SUBMITTED" || submission.status === "REJECTED";
 
   return (

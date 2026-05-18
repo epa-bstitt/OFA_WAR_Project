@@ -28,7 +28,7 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
   }
 
   const submission = result.submission;
-  const canEdit = submission.status === "SUBMITTED";
+  const canEdit = submission.status === "SUBMITTED" || submission.status === "INFO_NEEDED";
 
   return (
     <div className="space-y-6">

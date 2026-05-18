@@ -152,7 +152,7 @@ export async function createPrompt(
         userId: session.user.id,
         resourceType: "prompt",
         resourceId: prompt.id,
-        metadata: { name: data.name, version: "1.0.0" },
+        metadata: JSON.stringify({ name: data.name, version: "1.0.0" }),
       },
     });
 
@@ -220,7 +220,7 @@ export async function updatePrompt(
         userId: session.user.id,
         resourceType: "prompt",
         resourceId: prompt.id,
-        metadata: { version: newVersion, changedFields: Object.keys(data) },
+        metadata: JSON.stringify({ version: newVersion, changedFields: Object.keys(data) }),
       },
     });
 
@@ -271,7 +271,7 @@ export async function deletePrompt(
         userId: session.user.id,
         resourceType: "prompt",
         resourceId: id,
-        metadata: { name: existingPrompt.name },
+        metadata: JSON.stringify({ name: existingPrompt.name }),
       },
     });
 
@@ -323,7 +323,7 @@ export async function setActivePrompt(
         userId: session.user.id,
         resourceType: "prompt",
         resourceId: id,
-        metadata: { name: prompt.name, version: prompt.version },
+        metadata: JSON.stringify({ name: prompt.name, version: prompt.version }),
       },
     });
 

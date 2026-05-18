@@ -13,7 +13,6 @@ import { TerseEditor } from "@/components/features/review/TerseEditor";
 import { ReviewActions } from "@/components/features/review/ReviewActions";
 import {
   approveSubmission,
-  rejectSubmission,
   type SubmissionWithUser,
 } from "@/app/actions/review";
 import { ArrowLeft, Eye } from "lucide-react";
@@ -45,13 +44,6 @@ export default function ReviewDetailPage({
     },
     []
   );
-
-  const handleReject = useCallback(async (id: string, reason: string) => {
-    const result = await rejectSubmission(id, reason);
-    if (!result.success) {
-      throw new Error(result.error);
-    }
-  }, []);
 
   const handleSkip = useCallback(() => {
     if (nextId) {
@@ -114,7 +106,6 @@ export default function ReviewDetailPage({
             submissionId={submission.id}
             terseText={terseText}
             onApprove={handleApprove}
-            onReject={handleReject}
             onSkip={handleSkip}
             hasNext={!!nextId}
             hasPrev={!!prevId}

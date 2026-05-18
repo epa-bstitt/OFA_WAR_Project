@@ -21,6 +21,7 @@ export interface ActiveContractDetails {
 export interface MockContract {
   id: string;
   category: string;
+  assigneeIds?: string[];
   contractName: string;
   imageUrl: string;
   imageAlt: string;
@@ -29,6 +30,11 @@ export interface MockContract {
   previousWeekSubmission: string;
   currentUpdatePlaceholder: string;
   history: MockContractSubmission[];
+  latestFeedback?: {
+    comment: string;
+    status: string;
+    createdAt: string;
+  } | null;
 }
 
 export interface ContractFormInput {
@@ -42,10 +48,65 @@ export interface ContractFormInput {
   cs: string;
   orderNumber: string;
   category?: string;
+  assigneeIds?: string[];
 }
+
+export const MOCK_CONTRACT_ASSIGNEES: Record<string, { name: string; email: string }> = {
+  "jamila-barnes": {
+    name: "Jamila Barnes",
+    email: "jamila.barnes@epa.gov",
+  },
+  "brian-harris": {
+    name: "Brian Harris",
+    email: "brian.harris@epa.gov",
+  },
+  "avery-coleman": {
+    name: "Avery Coleman",
+    email: "avery.coleman@epa.gov",
+  },
+  "morgan-lee": {
+    name: "Morgan Lee",
+    email: "morgan.lee@epa.gov",
+  },
+};
 
 interface ContractStore {
   contracts: MockContract[];
+}
+
+function normalizeHistorySignature(entry: MockContractSubmission): string {
+  return `${entry.weekOf.trim()}|${entry.submittedAt.trim()}|${entry.summary.trim().toLowerCase()}`;
+}
+
+function dedupeContractHistory(contract: MockContract) {
+  const seen = new Set<string>();
+  const deduped: MockContractSubmission[] = [];
+
+  for (const entry of contract.history) {
+    const signature = normalizeHistorySignature(entry);
+    if (seen.has(signature)) {
+      continue;
+    }
+    seen.add(signature);
+    deduped.push(entry);
+  }
+
+  contract.history = deduped;
+
+  const latest = contract.history[0];
+  if (latest) {
+    contract.previousWeekLabel = `Week of ${latest.weekOf}`;
+    contract.previousWeekSubmission = latest.summary;
+  } else {
+    contract.previousWeekLabel = "Week of N/A";
+    contract.previousWeekSubmission = "No prior submission yet.";
+  }
+}
+
+function dedupeContractStore(store: ContractStore) {
+  for (const contract of store.contracts) {
+    dedupeContractHistory(contract);
+  }
 }
 
 const mockContractsByUser: Record<string, MockContract[]> = {
@@ -53,6 +114,7 @@ const mockContractsByUser: Record<string, MockContract[]> = {
     {
       id: "ebusiness",
       category: "eBusiness",
+      assigneeIds: [],
       contractName: "eBusiness",
       imageUrl:
         "https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1200&q=80",
@@ -111,7 +173,8 @@ const mockContractsByUser: Record<string, MockContract[]> = {
     },
     {
       id: "hesc-ii",
-      category: "HESC II",
+      category: "Current and Active Contracts/Purchase Order Outlook",
+      assigneeIds: ["jamila-barnes", "avery-coleman"],
       contractName: "HESC II",
       imageUrl:
         "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
@@ -170,7 +233,8 @@ const mockContractsByUser: Record<string, MockContract[]> = {
     },
     {
       id: "iti-iii",
-      category: "ITI III",
+      category: "Current and Active Contracts/Purchase Order Outlook",
+      assigneeIds: ["brian-harris"],
       contractName: "ITI III",
       imageUrl:
         "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80",
@@ -248,6 +312,8 @@ function createContractId(contractName: string): string {
 }
 
 function normalizeContractInput(input: ContractFormInput): ContractFormInput {
+  const hasAssigneeIds = Array.isArray(input.assigneeIds);
+
   return {
     contractName: input.contractName.trim(),
     cor: input.cor.trim(),
@@ -259,6 +325,13 @@ function normalizeContractInput(input: ContractFormInput): ContractFormInput {
     cs: input.cs.trim(),
     orderNumber: input.orderNumber.trim(),
     category: (input.category ?? "Contract").trim() || "Contract",
+    ...(hasAssigneeIds
+      ? {
+          assigneeIds: input.assigneeIds
+            ?.map((value) => String(value).trim())
+            .filter((value) => value.length > 0),
+        }
+      : {}),
   };
 }
 
@@ -268,6 +341,7 @@ function createContractRecord(input: ContractFormInput): MockContract {
   return {
     id: createContractId(normalized.contractName),
     category: normalized.category ?? "Contract",
+    assigneeIds: normalized.assigneeIds ?? [],
     contractName: normalized.contractName,
     imageUrl:
       "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80",
@@ -298,11 +372,14 @@ function buildInitialStore(): ContractStore {
   const primaryContracts = mockContractsByUser["demo-admin"];
   const clonedContracts = primaryContracts.map((contract) => ({
     ...contract,
+    assigneeIds: [...(contract.assigneeIds ?? [])],
     activeContract: { ...contract.activeContract },
     history: contract.history.map((entry) => ({ ...entry })),
   }));
 
-  return { contracts: clonedContracts };
+  const store = { contracts: clonedContracts };
+  dedupeContractStore(store);
+  return store;
 }
 
 function getContractStore(): ContractStore {
@@ -310,12 +387,15 @@ function getContractStore(): ContractStore {
     globalForContractStore.contractStore = buildInitialStore();
   }
 
+  dedupeContractStore(globalForContractStore.contractStore);
+
   return globalForContractStore.contractStore;
 }
 
 function cloneContract(contract: MockContract): MockContract {
   return {
     ...contract,
+    assigneeIds: [...(contract.assigneeIds ?? [])],
     activeContract: { ...contract.activeContract },
     history: contract.history.map((entry) => ({ ...entry })),
   };
@@ -344,6 +424,7 @@ export function updateContract(contractId: string, input: ContractFormInput): Mo
   const updated: MockContract = {
     ...current,
     category: normalized.category ?? current.category,
+    assigneeIds: normalized.assigneeIds ?? current.assigneeIds ?? [],
     contractName: normalized.contractName,
     activeContract: {
       contractName: normalized.contractName,
@@ -372,7 +453,7 @@ export function deleteContract(contractId: string): boolean {
 
 export function addWarEntryToContract(
   contractId: string,
-  update: { summary: string; weekOf?: string; status?: MockContractSubmission["status"] }
+  update: { summary: string; weekOf?: string; status?: MockContractSubmission["status"]; existingEntryId?: string }
 ): MockContractSubmission | null {
   const store = getContractStore();
   const contract = store.contracts.find((item) => item.id === contractId);
@@ -393,6 +474,32 @@ export function addWarEntryToContract(
     return null;
   }
 
+  const existingIndex = update.existingEntryId
+    ? contract.history.findIndex((entry) => entry.id === update.existingEntryId)
+    : -1;
+
+  if (existingIndex >= 0) {
+    const existing = contract.history[existingIndex];
+    const updatedEntry: MockContractSubmission = {
+      ...existing,
+      weekOf,
+      submittedAt: isoDate,
+      status: update.status ?? existing.status,
+      summary,
+    };
+
+    contract.history[existingIndex] = updatedEntry;
+    if (existingIndex > 0) {
+      contract.history.splice(existingIndex, 1);
+      contract.history.unshift(updatedEntry);
+    }
+
+    contract.previousWeekLabel = `Week of ${updatedEntry.weekOf}`;
+    contract.previousWeekSubmission = updatedEntry.summary;
+
+    return { ...updatedEntry };
+  }
+
   const entry: MockContractSubmission = {
     id: `${contractId}-${now.getTime()}`,
     weekOf,
@@ -402,8 +509,7 @@ export function addWarEntryToContract(
   };
 
   contract.history.unshift(entry);
-  contract.previousWeekLabel = `Week of ${entry.weekOf}`;
-  contract.previousWeekSubmission = entry.summary;
+  dedupeContractHistory(contract);
 
   return { ...entry };
 }

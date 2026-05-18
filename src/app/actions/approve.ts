@@ -327,7 +327,7 @@ export async function approveSubmission(
         userId: session.user.id,
         resourceType: "submission",
         resourceId: submissionId,
-        metadata: { notes, approvedAt: new Date().toISOString() },
+        metadata: JSON.stringify({ notes, approvedAt: new Date().toISOString() }),
       },
     });
 
@@ -406,7 +406,7 @@ export async function rejectSubmission(
         userId: session.user.id,
         resourceType: "submission",
         resourceId: submissionId,
-        metadata: { reason, rejectedAt: new Date().toISOString() },
+        metadata: JSON.stringify({ reason, rejectedAt: new Date().toISOString() }),
       },
     });
 
@@ -516,11 +516,11 @@ export async function exportSubmissionsToCSV(
         userId: session.user.id,
         resourceType: "export",
         resourceId: "csv",
-        metadata: {
+        metadata: JSON.stringify({
           count: submissions.length,
           filename,
           exportedAt: new Date().toISOString(),
-        },
+        }),
       },
     });
 
