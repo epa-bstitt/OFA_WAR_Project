@@ -197,7 +197,8 @@ export function ContractUpdateCards({
   enhancedEditorEnabled = true,
   submissionsEnabled = true,
   deadlineOverrideEnabled = false,
-}: ContractUpdateCardsProps) {
+  userRole = "contributor", // "contributor" or "overseer"; default to contributor for demo
+}: ContractUpdateCardsProps & { userRole?: "contributor" | "overseer" }) {
   const router = useRouter();
   const referenceNow = useMemo(() => new Date(), []);
   const submissionWindowOpen = useMemo(
@@ -1194,7 +1195,7 @@ export function ContractUpdateCards({
                         setSelectedActiveContractId(contract.id);
                       }}
                     >
-                      Active contract
+                      Contract details
                     </Button>
                     <Button
                       type="button"
@@ -1424,94 +1425,122 @@ export function ContractUpdateCards({
         {selectedActiveContractId && selectedActiveContract && (
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Current Active Contract</DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle>{selectedActiveContract.contractName || "Contract Details"}</DialogTitle>
+                {/* Category Switch Dropdown on the right */}
+                <div className="flex items-center gap-2 mr-10">
+                  <Select
+                    value={selectedActiveContract.categorySwitch || "CURRENT"}
+                    onValueChange={(value) => {
+                      updateActiveContractField(selectedActiveContractId, "categorySwitch", value);
+                    }}
+                  >
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="RECOMPETES">New Awards and Recompetes</SelectItem>
+                      <SelectItem value="CURRENT">Current and Active Contracts/Purchase Order Outlook</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <DialogDescription>
                 Track the current active contract details for this card.
               </DialogDescription>
             </DialogHeader>
 
+            {/* Modal content changes based on dropdown selection */}
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <p className="text-xs font-medium text-slate-500">Contract Name</p>
-                <Input
-                  value={selectedActiveContract.contractName}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "contractName", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">COR</p>
-                <Input
-                  value={selectedActiveContract.cor}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "cor", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">Contract Number</p>
-                <Input
-                  value={selectedActiveContract.contractNumber}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "contractNumber", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">Office</p>
-                <Input
-                  value={selectedActiveContract.office}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "office", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">Next Period of Perf.</p>
-                <Input
-                  value={selectedActiveContract.nextPeriodOfPerf}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "nextPeriodOfPerf", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">Ultimate Completion Date</p>
-                <Input
-                  value={selectedActiveContract.ultimateCompletionDate}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "ultimateCompletionDate", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">CO</p>
-                <Input
-                  value={selectedActiveContract.co}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "co", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">CS</p>
-                <Input
-                  value={selectedActiveContract.cs}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "cs", event.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-500">Order Number</p>
-                <Input
-                  value={selectedActiveContract.orderNumber}
-                  onChange={(event) =>
-                    updateActiveContractField(selectedActiveContractId, "orderNumber", event.target.value)
-                  }
-                />
-              </div>
+              {selectedActiveContract.categorySwitch === "RECOMPETES" ? (
+                <>
+                  {(() => {
+                    const isOnTable = contracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "New Awards and Recompetes");
+                    const isLocked = userRole === "contributor" && !isOnTable;
+                    const labels: Record<string, string> = {
+                      contractName: "Upcoming Procurement",
+                      cor: "COR",
+                      contractNumber: "Contract Number",
+                      office: "Office",
+                      nextPeriodOfPerf: "Next Period of Perf.",
+                      ultimateCompletionDate: "Contract End Date",
+                      co: "CO",
+                      cs: "CS",
+                      orderNumber: "Order Number",
+                      solicitationNumber: "Solicitation Number",
+                      anticipatedAwardDate: "Anticipated Award Date",
+                      notes: "Notes"
+                    };
+                    return (
+                      <>
+                        {isLocked && (
+                          <div className="mb-2 flex items-center gap-2 text-amber-700 text-xs font-medium">
+                            <span role="img" aria-label="locked">🔒</span> This contract is not editable in this view.
+                          </div>
+                        )}
+                        {Object.entries(selectedActiveContract).map(([key, value]) => {
+                          if (["id", "categorySwitch"].includes(key)) return null;
+                          return (
+                            <div className="space-y-2" key={key}>
+                              <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
+                              <Input
+                                value={value || ""}
+                                onChange={event => updateActiveContractField(selectedActiveContractId, key, event.target.value)}
+                                disabled={isLocked}
+                                className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
+                              />
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+                </>
+              ) : (
+                <>
+                  {(() => {
+                    const isOnTable = contracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "Current and Active Contracts/Purchase Order Outlook");
+                    const isLocked = userRole === "contributor" && !isOnTable;
+                    const labels: Record<string, string> = {
+                      contractName: "Contract Name",
+                      cor: "COR",
+                      contractNumber: "Contract Number",
+                      office: "Office",
+                      nextPeriodOfPerf: "Next Period of Perf.",
+                      ultimateCompletionDate: "Ultimate Completion Date",
+                      co: "CO",
+                      cs: "CS",
+                      orderNumber: "Order Number",
+                      solicitationNumber: "Solicitation Number",
+                      anticipatedAwardDate: "Anticipated Award Date",
+                      notes: "Notes"
+                    };
+                    return (
+                      <>
+                        {isLocked && (
+                          <div className="mb-2 flex items-center gap-2 text-amber-700 text-xs font-medium">
+                            <span role="img" aria-label="locked">🔒</span> This contract is not editable in this view.
+                          </div>
+                        )}
+                        {Object.entries(selectedActiveContract).map(([key, value]) => {
+                          if (["id", "categorySwitch"].includes(key)) return null;
+                          return (
+                            <div className="space-y-2" key={key}>
+                              <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
+                              <Input
+                                value={value || ""}
+                                onChange={event => updateActiveContractField(selectedActiveContractId, key, event.target.value)}
+                                disabled={isLocked}
+                                className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
+                              />
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
             </div>
 
             <DialogFooter>

@@ -1,35 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import { ChevronDown, ExternalLink, Pencil, Plus, Trash2, XCircle } from "lucide-react";
-import { toast } from "sonner";
-import { MOCK_CONTRACT_ASSIGNEES, type MockContract } from "@/lib/mock-contracts";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { MOCK_CONTRACT_ASSIGNEES } from "@/lib/mock-contracts";
+
+// Helper for notification interval tracking
+function getNotificationKey(contractId, intervalLabel) {
+  return `contract_notify_${contractId}_${intervalLabel}`;
+}
+
+function getDaysRemaining(endDateStr) {
+  const end = new Date(endDateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = end.getTime() - today.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+
+import { SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContractsOutlookTable } from "./ContractsOutlookTable";
 import { NewAwardsRecompetesTable } from "./NewAwardsRecompetesTable";
@@ -1204,37 +1193,38 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
         </TabsContent>
 
         <TabsContent value="legacy" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Legacy Contracts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ContractsOutlookTable
-                  contracts={legacyContracts}
-                  showActions
-                  getAssigneeLabel={(contract) => getAssigneeLabel(contract.assigneeIds ?? [], assigneeOptions)}
-                  getAssigneeDetails={(contract) => getAssigneeDetails(contract.assigneeIds ?? [], assigneeOptions)}
-                  onEdit={(contract) => startEdit(contract, "outlook")}
-                  onDelete={handleDelete}
-                  onMove={handleMove}
-                  moveTargets={getMoveTargets("legacy")}
-                  isDeleting={isSaving}
-                />
-              </CardContent>
-            </Card>
-
-            {renderContractFormCard("legacy")}
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Legacy Contracts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y divide-slate-200">
+                {legacyContracts.length === 0 && (
+                  <li className="py-4 text-slate-500">No legacy contracts.</li>
+                )}
+                {legacyContracts.map((contract) => (
+                  <li key={contract.id} className="flex items-center justify-between py-3">
+                    <button
+                      className="flex items-center gap-2 text-sky-800 hover:underline focus:outline-none"
+                      onClick={() => setSelectedContract(contract)}
+                    >
+                      <span className="text-base font-medium">{contract.contractName}</span>
+                      <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">View</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
       <Dialog open={Boolean(selectedContract)} onOpenChange={(open) => !open && setSelectedContract(null)}>
         {selectedContract && (
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{selectedContract.contractName}</DialogTitle>
-              <DialogDescription>High-level contract information.</DialogDescription>
+              <DialogDescription>Full contract record (read-only)</DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 text-sm sm:grid-cols-2">
               <p><span className="font-semibold">Assigned To:</span> {getAssigneeLabel(selectedContract.assigneeIds ?? [], assigneeOptions)}</p>
@@ -1247,10 +1237,12 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
               <p><span className="font-semibold">CO:</span> {selectedContract.activeContract.co || "-"}</p>
               <p><span className="font-semibold">CS:</span> {selectedContract.activeContract.cs || "-"}</p>
             </div>
+            {/* Past updates and other info section (placeholder) */}
+            <div className="mt-4 rounded bg-slate-50 p-3 text-xs text-slate-700">
+              <p className="mb-1 font-semibold">Past Contributor Updates & Important Info</p>
+              <p>(All past updates and additional info would be shown here. This is a catch-all for record keeping.)</p>
+            </div>
             <DialogFooter>
-              <Link href={`/contracts/${selectedContract.id}/wars`}>
-                <Button variant="outline">View WAR Entries</Button>
-              </Link>
               <Button type="button" onClick={() => setSelectedContract(null)}>Close</Button>
             </DialogFooter>
           </DialogContent>

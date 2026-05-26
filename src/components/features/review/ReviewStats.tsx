@@ -159,7 +159,7 @@ export function ReviewStats({
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         {items.map((item) => {
           const Icon = item.icon;
           const isInteractiveCard = Boolean(item.modalContent);
@@ -167,7 +167,10 @@ export function ReviewStats({
           return (
             <Card
               key={item.title}
-              className={isInteractiveCard ? "cursor-pointer transition hover:shadow-md" : undefined}
+              className={
+                (isInteractiveCard ? "cursor-pointer transition hover:shadow-lg" : "") +
+                " min-h-[220px] md:min-h-[260px] flex flex-col justify-center items-center px-8 py-6 text-center text-lg"
+              }
               onClick={isInteractiveCard ? () => setOpenModal(item.id) : undefined}
               role={isInteractiveCard ? "button" : undefined}
               tabIndex={isInteractiveCard ? 0 : undefined}
@@ -182,17 +185,17 @@ export function ReviewStats({
                   : undefined
               }
             >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardHeader className="flex flex-col items-center justify-center pb-2">
+                <CardTitle className="text-xl font-semibold text-muted-foreground mb-2">
                   {item.title}
                 </CardTitle>
-                <div className={`${item.bgColor} p-2 rounded-md`}>
-                  <Icon className={`h-4 w-4 ${item.color}`} />
+                <div className={`${item.bgColor} p-4 rounded-full mb-2 flex items-center justify-center`}>
+                  <Icon className={`h-8 w-8 ${item.color}`} />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{item.value}</div>
-                <p className="text-xs text-muted-foreground">{item.description}</p>
+                <div className="text-5xl font-extrabold mb-2">{item.value}</div>
+                <p className="text-base text-muted-foreground">{item.description}</p>
               </CardContent>
             </Card>
           );

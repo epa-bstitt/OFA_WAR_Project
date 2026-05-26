@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { OverseerReviewDeck } from "@/components/features/review/OverseerReviewDeck";
 import { OverseerSubmissionSearch } from "@/components/features/review/OverseerSubmissionSearch";
 import { BiWeeklySubmissionHistory } from "@/components/features/review/BiWeeklySubmissionHistory";
+import { WarOverviewExportControls } from "@/components/features/approve/WarOverviewExportControls";
 import { ContractManager } from "@/components/features/contracts/ContractManager";
 import {
   getPendingSubmissions,
@@ -131,13 +132,18 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     }),
   }));
 
+  // Calculate stats for cards
+  const pendingCount = overseerSubmissions.filter(s => s.status === "SUBMITTED").length;
+  const updatedCount = overseerSubmissions.filter(s => s.status === "INFO_NEEDED").length;
+  const approvedThisWeek = overseerSubmissions.filter(s => s.status === "APPROVED").length;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="WAR Review"
         description={
           isProgramOverseer
-            ? "Review weekly activity report submissions in card view or switch to the contract list view from the icons on the right."
+            ? "Review weekly activity report submissions. Use the toolbar below to export or view logs."
             : "Review and manage weekly activity report submissions"
         }
         section="Program Oversight"
@@ -147,29 +153,29 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
         ]}
       >
         {isProgramOverseer ? (
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1">
+          <div className="flex flex-row gap-3 items-center">
             <Link
               href="/approve?view=card"
               aria-label="Switch to card view"
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition border ${
                 !isListView
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  ? "bg-white text-slate-900 shadow-md border-slate-300"
+                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-white hover:text-slate-900"
               }`}
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
+              <LayoutGrid className="h-4 w-4 mr-2" />
               Card View
             </Link>
             <Link
               href="/approve?view=list"
               aria-label="Switch to list view"
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition border ${
                 isListView
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  ? "bg-white text-slate-900 shadow-md border-slate-300"
+                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-white hover:text-slate-900"
               }`}
             >
-              <List className="h-3.5 w-3.5" />
+              <List className="h-4 w-4 mr-2" />
               List View
             </Link>
           </div>
@@ -187,10 +193,18 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
             />
           ) : null}
 
-          <BiWeeklySubmissionHistory
-            periods={historyPeriods}
-            currentUserId={session.user.id}
-          />
+          <div className="mb-8">
+            <div className="flex flex-row justify-end items-center gap-2 mb-4">
+              <WarOverviewExportControls
+                contracts={overseerSubmissions.filter(s => s.status === "APPROVED")}
+                currentPeriodId={currentPeriod.id}
+              />
+              <BiWeeklySubmissionHistory
+                periods={historyPeriods}
+                currentUserId={session.user.id}
+              />
+            </div>
+          </div>
         </>
       )}
     </div>
