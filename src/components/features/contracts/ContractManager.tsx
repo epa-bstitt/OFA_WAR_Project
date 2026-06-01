@@ -1,7 +1,38 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { MOCK_CONTRACT_ASSIGNEES } from "@/lib/mock-contracts";
+import Link from "next/link";
+import { ChevronDown, ExternalLink, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { MOCK_CONTRACT_ASSIGNEES, type MockContract } from "@/lib/mock-contracts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContractsOutlookTable } from "./ContractsOutlookTable";
+import { NewAwardsRecompetesTable } from "./NewAwardsRecompetesTable";
 
 // Helper for notification interval tracking
 function getNotificationKey(contractId, intervalLabel) {
@@ -16,12 +47,6 @@ function getDaysRemaining(endDateStr) {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-
-import { SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ContractsOutlookTable } from "./ContractsOutlookTable";
-import { NewAwardsRecompetesTable } from "./NewAwardsRecompetesTable";
 
 interface ContractManagerProps {
   initialContracts: MockContract[];
