@@ -88,6 +88,9 @@ export default function LoginPage() {
           <CardDescription>
             Weekly Activity Report Management System
           </CardDescription>
+          <div className="pt-1">
+            <Badge variant="outline">Jake was here</Badge>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* EPA MAX Login */}
