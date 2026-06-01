@@ -3,11 +3,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LayoutGrid, List } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { OverseerReviewDeck } from "@/components/features/review/OverseerReviewDeck";
 import { OverseerSubmissionSearch } from "@/components/features/review/OverseerSubmissionSearch";
 import { BiWeeklySubmissionHistory } from "@/components/features/review/BiWeeklySubmissionHistory";
 import { WarOverviewExportControls } from "@/components/features/approve/WarOverviewExportControls";
 import { ContractManager } from "@/components/features/contracts/ContractManager";
+import { ContractLifecycleNotifier } from "@/components/features/contracts/ContractLifecycleNotifier";
 import {
   getPendingSubmissions,
 } from "@/app/actions/review";
@@ -132,10 +132,22 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     }),
   }));
 
-  // Calculate stats for cards
-  const pendingCount = overseerSubmissions.filter(s => s.status === "SUBMITTED").length;
-  const updatedCount = overseerSubmissions.filter(s => s.status === "INFO_NEEDED").length;
-  const approvedThisWeek = overseerSubmissions.filter(s => s.status === "APPROVED").length;
+  const exportContracts = overseerSubmissions
+    .filter((submission) => {
+      if (submission.status !== "APPROVED") {
+        return false;
+      }
+
+      const weekOf = new Date(submission.weekOf);
+      return weekOf >= currentPeriod.start && weekOf <= currentPeriod.end;
+    })
+    .map((submission) => ({
+      id: submission.id,
+      name: submission.contractName,
+      category:
+        submission.contractCategory === "New Awards and Recompetes" ? "recompetes" : "outlook",
+      periodId: currentPeriod.id,
+    }));
 
   return (
     <div className="space-y-6">
@@ -182,26 +194,30 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
         ) : null}
       </PageHeader>
 
+      {isProgramOverseer ? (
+        <ContractLifecycleNotifier contracts={contracts} audience="overseer" canAutoMove={false} />
+      ) : null}
+
       {isListView ? (
         <ContractManager initialContracts={contracts} hideFilters />
       ) : (
         <>
-          {isProgramOverseer ? (
+          <div className="space-y-4">
             <OverseerSubmissionSearch
               submissions={overseerSubmissions}
               currentUserId={session.user.id}
             />
-          ) : null}
 
-          <div className="mb-8">
-            <div className="flex flex-row justify-end items-center gap-2 mb-4">
-              <WarOverviewExportControls
-                contracts={overseerSubmissions.filter(s => s.status === "APPROVED")}
-                currentPeriodId={currentPeriod.id}
-              />
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
               <BiWeeklySubmissionHistory
                 periods={historyPeriods}
                 currentUserId={session.user.id}
+                actionSlot={
+                  <WarOverviewExportControls
+                    contracts={exportContracts}
+                    currentPeriodId={currentPeriod.id}
+                  />
+                }
               />
             </div>
           </div>

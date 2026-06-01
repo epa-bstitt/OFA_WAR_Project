@@ -18,6 +18,7 @@ interface ReviewStatsProps {
   pending: number;
   updated: number;
   approved: number;
+  compact?: boolean;
   startApprovedEmpty?: boolean;
   pendingModalTitle?: string;
   pendingModalDescription?: string;
@@ -50,6 +51,7 @@ export function ReviewStats({
   pending,
   updated,
   approved,
+  compact = false,
   startApprovedEmpty = false,
   pendingModalTitle = "Pending Review",
   pendingModalDescription = "Review and process the current pending WAR updates.",
@@ -169,7 +171,9 @@ export function ReviewStats({
               key={item.title}
               className={
                 (isInteractiveCard ? "cursor-pointer transition hover:shadow-lg" : "") +
-                " min-h-[220px] md:min-h-[260px] flex flex-col justify-center items-center px-8 py-6 text-center text-lg"
+                (compact
+                  ? " min-h-[140px] md:min-h-[160px] flex flex-col justify-center items-center px-4 py-4 text-center"
+                  : " min-h-[220px] md:min-h-[260px] flex flex-col justify-center items-center px-8 py-6 text-center text-lg")
               }
               onClick={isInteractiveCard ? () => setOpenModal(item.id) : undefined}
               role={isInteractiveCard ? "button" : undefined}
@@ -186,16 +190,16 @@ export function ReviewStats({
               }
             >
               <CardHeader className="flex flex-col items-center justify-center pb-2">
-                <CardTitle className="text-xl font-semibold text-muted-foreground mb-2">
+                <CardTitle className={`${compact ? "text-base" : "text-xl"} font-semibold text-muted-foreground mb-2`}>
                   {item.title}
                 </CardTitle>
-                <div className={`${item.bgColor} p-4 rounded-full mb-2 flex items-center justify-center`}>
-                  <Icon className={`h-8 w-8 ${item.color}`} />
+                <div className={`${item.bgColor} ${compact ? "p-2.5" : "p-4"} rounded-full mb-2 flex items-center justify-center`}>
+                  <Icon className={`${compact ? "h-5 w-5" : "h-8 w-8"} ${item.color}`} />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-5xl font-extrabold mb-2">{item.value}</div>
-                <p className="text-base text-muted-foreground">{item.description}</p>
+                <div className={`${compact ? "text-3xl" : "text-5xl"} font-extrabold mb-2`}>{item.value}</div>
+                <p className={`${compact ? "text-sm" : "text-base"} text-muted-foreground`}>{item.description}</p>
               </CardContent>
             </Card>
           );

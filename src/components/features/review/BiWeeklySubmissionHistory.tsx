@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { History } from "lucide-react";
+import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -23,9 +24,10 @@ export type BiWeeklySubmissionHistoryPeriod = {
 type BiWeeklySubmissionHistoryProps = {
   periods: BiWeeklySubmissionHistoryPeriod[];
   currentUserId: string;
+  actionSlot?: ReactNode;
 };
 
-export function BiWeeklySubmissionHistory({ periods, currentUserId }: BiWeeklySubmissionHistoryProps) {
+export function BiWeeklySubmissionHistory({ periods, currentUserId, actionSlot }: BiWeeklySubmissionHistoryProps) {
   const [selectedPeriodId, setSelectedPeriodId] = useState(periods[0]?.periodId || "");
 
   const selectedPeriod = useMemo(
@@ -51,7 +53,8 @@ export function BiWeeklySubmissionHistory({ periods, currentUserId }: BiWeeklySu
 
   return (
     <section className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {actionSlot}
         <Card className="w-full max-w-md border-slate-200 shadow-sm">
           <CardContent className="flex items-center gap-3 p-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -86,6 +89,7 @@ export function BiWeeklySubmissionHistory({ periods, currentUserId }: BiWeeklySu
         pending={pendingSubmissions.length}
         updated={updatedSubmissions.length}
         approved={approvedSubmissions.length}
+        compact
         pendingModalTitle={`${selectedPeriod.label} - Pending Review`}
         pendingModalDescription="Open the pending submissions for this bi-weekly period."
         pendingModalContent={

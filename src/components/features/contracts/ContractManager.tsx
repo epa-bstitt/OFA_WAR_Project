@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ChevronDown, ExternalLink, Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { MOCK_CONTRACT_ASSIGNEES, type MockContract } from "@/lib/mock-contracts";
+import { MOCK_CONTRACT_ASSIGNEES, type MockContract, type MockContractSubmission } from "@/lib/mock-contracts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -33,19 +33,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContractsOutlookTable } from "./ContractsOutlookTable";
 import { NewAwardsRecompetesTable } from "./NewAwardsRecompetesTable";
-
-// Helper for notification interval tracking
-function getNotificationKey(contractId, intervalLabel) {
-  return `contract_notify_${contractId}_${intervalLabel}`;
-}
-
-function getDaysRemaining(endDateStr) {
-  const end = new Date(endDateStr);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diff = end.getTime() - today.getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-}
 
 
 interface ContractManagerProps {
@@ -203,6 +190,9 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
   const [dueFilter, setDueFilter] = useState<"all" | "dueSoon">("all");
   const [sortBy, setSortBy] = useState<"name" | "endDate" | "assignee">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [legacyWarEntries, setLegacyWarEntries] = useState<MockContractSubmission[]>([]);
+  const [isLoadingLegacyHistory, setIsLoadingLegacyHistory] = useState(false);
+  const [legacyHistoryError, setLegacyHistoryError] = useState<string | null>(null);
 
   const isEditMode = Boolean(editingContractId);
 
@@ -324,6 +314,56 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
     [sortedContracts]
   );
 
+  useEffect(() => {
+    if (!selectedContract) {
+      setLegacyWarEntries([]);
+      setLegacyHistoryError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadLegacyHistory = async () => {
+      setIsLoadingLegacyHistory(true);
+      setLegacyHistoryError(null);
+
+      try {
+        const response = await fetch(`/api/contracts/${selectedContract.id}/wars`, {
+          cache: "no-store",
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to load past contract updates.");
+        }
+
+        const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+        if (!cancelled) {
+          setLegacyWarEntries(entries);
+        }
+      } catch (historyError) {
+        if (!cancelled) {
+          const message =
+            historyError instanceof Error
+              ? historyError.message
+              : "Failed to load past contract updates.";
+          setLegacyHistoryError(message);
+          setLegacyWarEntries([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingLegacyHistory(false);
+        }
+      }
+    };
+
+    void loadLegacyHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedContract]);
+
   function resetForm() {
     setEditingContractId(null);
     setFormState(EMPTY_FORM);
@@ -383,20 +423,19 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
       return true;
     }
 
-    const slashDate = /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/;
     const isoDate = /^\d{4}-\d{2}-\d{2}$/;
-    return slashDate.test(trimmed) || isoDate.test(trimmed);
+    return isoDate.test(trimmed);
   }
 
   function validateForm(mode: FormMode): Partial<Record<keyof ContractFormState, string>> {
     const nextErrors: Partial<Record<keyof ContractFormState, string>> = {};
 
     if (!isAcceptedDateInput(formState.nextPeriodOfPerf)) {
-      nextErrors.nextPeriodOfPerf = "Use MM/DD or YYYY-MM-DD format.";
+      nextErrors.nextPeriodOfPerf = "Use YYYY-MM-DD format.";
     }
 
     if (!isAcceptedDateInput(formState.ultimateCompletionDate)) {
-      nextErrors.ultimateCompletionDate = "Use MM/DD or YYYY-MM-DD format.";
+      nextErrors.ultimateCompletionDate = "Use YYYY-MM-DD format.";
     }
 
     return nextErrors;
@@ -603,6 +642,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
           cs: contract.activeContract.cs,
           orderNumber: contract.activeContract.orderNumber,
           category: targetCategory,
+          assigneeIds: contract.assigneeIds ?? [],
         }),
       });
 
@@ -815,7 +855,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 <Label htmlFor={`${idPrefix}-ultimateCompletionDate`}>Contract End Date</Label>
                 <Input
                   id={`${idPrefix}-ultimateCompletionDate`}
-                  placeholder="MM/DD or YYYY-MM-DD"
+                  placeholder="YYYY-MM-DD"
                   value={formState.ultimateCompletionDate}
                   onChange={(event) => updateFormField("ultimateCompletionDate", event.target.value)}
                   className={fieldErrors.ultimateCompletionDate ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
@@ -826,7 +866,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 <Label htmlFor={`${idPrefix}-nextPeriodOfPerf`}>PALT Start</Label>
                 <Input
                   id={`${idPrefix}-nextPeriodOfPerf`}
-                  placeholder="MM/DD or YYYY-MM-DD"
+                  placeholder="YYYY-MM-DD"
                   value={formState.nextPeriodOfPerf}
                   onChange={(event) => updateFormField("nextPeriodOfPerf", event.target.value)}
                   className={fieldErrors.nextPeriodOfPerf ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
@@ -946,7 +986,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 <Label htmlFor={`${idPrefix}-nextPeriodOfPerf`}>Next Period of Perf.</Label>
                 <Input
                   id={`${idPrefix}-nextPeriodOfPerf`}
-                  placeholder="MM/DD or YYYY-MM-DD"
+                  placeholder="YYYY-MM-DD"
                   value={formState.nextPeriodOfPerf}
                   onChange={(event) => updateFormField("nextPeriodOfPerf", event.target.value)}
                   className={fieldErrors.nextPeriodOfPerf ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
@@ -960,7 +1000,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 <Label htmlFor={`${idPrefix}-ultimateCompletionDate`}>Ultimate Completion Date</Label>
                 <Input
                   id={`${idPrefix}-ultimateCompletionDate`}
-                  placeholder="MM/DD or YYYY-MM-DD"
+                  placeholder="YYYY-MM-DD"
                   value={formState.ultimateCompletionDate}
                   onChange={(event) => updateFormField("ultimateCompletionDate", event.target.value)}
                   className={fieldErrors.ultimateCompletionDate ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
@@ -1262,10 +1302,52 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
               <p><span className="font-semibold">CO:</span> {selectedContract.activeContract.co || "-"}</p>
               <p><span className="font-semibold">CS:</span> {selectedContract.activeContract.cs || "-"}</p>
             </div>
-            {/* Past updates and other info section (placeholder) */}
-            <div className="mt-4 rounded bg-slate-50 p-3 text-xs text-slate-700">
-              <p className="mb-1 font-semibold">Past Contributor Updates & Important Info</p>
-              <p>(All past updates and additional info would be shown here. This is a catch-all for record keeping.)</p>
+            <div className="mt-4 space-y-3 rounded bg-slate-50 p-3 text-xs text-slate-700">
+              <p className="font-semibold">Past Contributor Updates & Important Info</p>
+
+              {isLoadingLegacyHistory ? (
+                <p>Loading update history...</p>
+              ) : legacyHistoryError ? (
+                <p className="text-rose-600">{legacyHistoryError}</p>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <p className="font-medium text-slate-900">Contract History Records</p>
+                    {selectedContract.history.length === 0 ? (
+                      <p className="text-slate-600">No contract history records found.</p>
+                    ) : (
+                      <ul className="mt-1 space-y-1">
+                        {selectedContract.history.map((entry) => (
+                          <li key={`history-${entry.id}`} className="rounded border border-slate-200 bg-white p-2">
+                            <p><span className="font-semibold">Week Of:</span> {entry.weekOf}</p>
+                            <p><span className="font-semibold">Submitted:</span> {entry.submittedAt}</p>
+                            <p><span className="font-semibold">Status:</span> {entry.status}</p>
+                            <p><span className="font-semibold">Summary:</span> {entry.summary || "-"}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="font-medium text-slate-900">WAR Submission Timeline</p>
+                    {legacyWarEntries.length === 0 ? (
+                      <p className="text-slate-600">No WAR submissions found for this contract.</p>
+                    ) : (
+                      <ul className="mt-1 space-y-1">
+                        {legacyWarEntries.map((entry) => (
+                          <li key={`war-${entry.id}`} className="rounded border border-slate-200 bg-white p-2">
+                            <p><span className="font-semibold">Week Of:</span> {entry.weekOf}</p>
+                            <p><span className="font-semibold">Submitted:</span> {entry.submittedAt}</p>
+                            <p><span className="font-semibold">Status:</span> {entry.status}</p>
+                            <p><span className="font-semibold">Summary:</span> {entry.summary || "-"}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => setSelectedContract(null)}>Close</Button>

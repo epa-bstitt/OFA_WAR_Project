@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ContractUpdateCards } from "@/components/features/dashboard/ContractUpdateCards";
 import { ContributorUserSwitcher } from "@/components/features/dashboard/ContributorUserSwitcher";
+import { ContractLifecycleNotifier } from "@/components/features/contracts/ContractLifecycleNotifier";
 import { Card, CardContent } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -89,6 +90,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <ContributorUserSwitcher
           users={contributorUsers}
           selectedUserId={activeUserId}
+        />
+      ) : null}
+
+      {sessionUserRole === "CONTRIBUTOR" ? (
+        <ContractLifecycleNotifier
+          contracts={dashboardContracts}
+          audience="contributor"
+          canAutoMove={false}
         />
       ) : null}
 

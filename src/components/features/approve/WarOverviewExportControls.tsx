@@ -18,6 +18,7 @@ type ExportContractOption = {
   id: string;
   name: string;
   category: "recompetes" | "outlook";
+  periodId?: string;
 };
 
 
