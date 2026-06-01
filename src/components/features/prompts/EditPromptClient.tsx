@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { notFound } from "next/navigation";
 import { PromptForm } from "@/components/features/prompts/PromptForm";
 import { updatePrompt, type PromptTemplate } from "@/app/actions/prompts";
 

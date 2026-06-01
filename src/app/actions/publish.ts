@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { createPage, formatWARContent, isGraphConfigured, type OneNotePage } from "@/lib/graph/onenote";
+import { createPage, formatWARContent, isGraphConfigured } from "@/lib/graph/onenote";
 import { withRetry, graphRetryOptions } from "@/lib/graph/retry";
 
 const ROLE_HIERARCHY: Record<string, number> = {

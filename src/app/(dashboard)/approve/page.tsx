@@ -52,12 +52,17 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
 
   const submissions = submissionsResult.success ? submissionsResult.submissions : [];
   const contracts = await getContractsOutlookFromDb();
+  const contractById = new Map(contracts.map((contract) => [contract.id, contract]));
   const now = new Date();
   const currentPeriod = getCurrentSubmissionPeriod(now);
   const recentPeriods = getRecentSubmissionPeriods(now, 6);
 
   const overseerSubmissions = submissions.map((submission) => {
     const summary = submission.rawText.trim();
+
+    const linkedContract =
+      (submission.projectId ? contractById.get(submission.projectId) : undefined) ||
+      (submission.contractId ? contractById.get(submission.contractId) : undefined);
 
     const mappedContractBySummary = contracts.find((contract) => {
       if (!(contract.assigneeIds ?? []).includes(submission.userId)) {
@@ -73,6 +78,7 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     });
 
     const mappedContract =
+      linkedContract ||
       mappedContractBySummary ||
       contracts.find((contract) => (contract.assigneeIds ?? []).includes(submission.userId));
 
@@ -97,6 +103,7 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
 
     return {
       ...submission,
+      contractId: mappedContract?.id ?? submission.projectId ?? submission.contractId ?? null,
       contractName:
         mappedContract?.contractName ||
         `WAR Submission ${submission.user.name ? `- ${submission.user.name}` : ""}`,
@@ -122,17 +129,21 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     };
   });
 
+  const cardEligibleSubmissions = overseerSubmissions.filter(
+    (submission) => submission.contractCategory !== "Legacy Contracts"
+  );
+
   const historyPeriods = recentPeriods.map((period) => ({
     periodId: period.id,
     label: `Bi-Weekly ${period.label}${period.id === currentPeriod.id ? " (Current)" : ""}`,
     deadline: period.deadline,
-    submissions: overseerSubmissions.filter((submission) => {
+    submissions: cardEligibleSubmissions.filter((submission) => {
       const weekOf = new Date(submission.weekOf);
       return weekOf >= period.start && weekOf <= period.end;
     }),
   }));
 
-  const exportContracts = overseerSubmissions
+  const exportContracts = cardEligibleSubmissions
     .filter((submission) => {
       if (submission.status !== "APPROVED") {
         return false;
@@ -204,7 +215,7 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
         <>
           <div className="space-y-4">
             <OverseerSubmissionSearch
-              submissions={overseerSubmissions}
+              submissions={cardEligibleSubmissions}
               currentUserId={session.user.id}
             />
 

@@ -22,13 +22,6 @@ type AuditLog = {
   } | null;
 };
 
-const ROLE_HIERARCHY: Record<string, number> = {
-  ADMINISTRATOR: 4,
-  PROGRAM_OVERSEER: 3,
-  AGGREGATOR: 2,
-  CONTRIBUTOR: 1,
-};
-
 /**
  * Server Action: Get audit logs with filtering
  * Only accessible by ADMINISTRATOR role

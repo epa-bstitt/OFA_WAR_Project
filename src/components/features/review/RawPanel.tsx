@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { PriorityBadge, calculatePriority, getDaysSince } from "./PriorityBadge";
 import { StatusBadge } from "@/components/features/submissions/StatusBadge";
 import { ConfidenceBadge } from "@/components/features/submit/ConfidenceBadge";

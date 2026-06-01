@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { History } from "lucide-react";
 import type { ReactNode } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,

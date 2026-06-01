@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { hasRequiredRole, hasMinimumRole } from "@/lib/auth";
+import { hasRequiredRole } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit/logger";
 import { z } from "zod";
 

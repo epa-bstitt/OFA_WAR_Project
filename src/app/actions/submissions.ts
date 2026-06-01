@@ -1,12 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { sendWorkflowEmail } from "@/lib/notifications/email";
 import { submissionSchema, SubmissionInput, sanitizeRawText } from "@/lib/validation/submission";
-import { getBiWeekDate, getCurrentBiWeek } from "@/lib/date-utils";
+import { getCurrentBiWeek } from "@/lib/date-utils";
 import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
 import { getContractsOutlook } from "@/lib/mock-contracts";
 import { cookies } from "next/headers";

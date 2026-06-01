@@ -62,7 +62,7 @@ export async function handleMessage(context: TurnContext): Promise<void> {
       return;
     }
     
-    await handleNewSubmission(context, conversationId, teamsUserId);
+    await handleNewSubmission(context, conversationId);
     return;
   }
   
@@ -72,7 +72,7 @@ export async function handleMessage(context: TurnContext): Promise<void> {
     
     switch (action) {
       case "convert":
-        await handleConvert(context, activity.value as WarSubmissionData, state);
+        await handleConvert(context, activity.value as WarSubmissionData);
         break;
       case "submit":
         await handleSubmit(context, activity.value as WarConfirmationData, state);
@@ -84,10 +84,10 @@ export async function handleMessage(context: TurnContext): Promise<void> {
         await handleCancel(context, conversationId, teamsUserId);
         break;
       case "retry":
-        await handleNewSubmission(context, conversationId, teamsUserId);
+        await handleNewSubmission(context, conversationId);
         break;
       case "new_submission":
-        await handleNewSubmission(context, conversationId, teamsUserId);
+        await handleNewSubmission(context, conversationId);
         break;
       default:
         // Unknown action
@@ -177,8 +177,7 @@ async function handleCancel(
  */
 async function handleNewSubmission(
   context: TurnContext,
-  conversationId: string,
-  teamsUserId: string
+  conversationId: string
 ): Promise<void> {
   // Reset state
   updateState(conversationId, {
@@ -208,8 +207,7 @@ async function handleNewSubmission(
  */
 async function handleConvert(
   context: TurnContext,
-  data: WarSubmissionData,
-  state: WarSubmissionState
+  data: WarSubmissionData
 ): Promise<void> {
   try {
     // Update state
@@ -290,8 +288,6 @@ async function handleSubmit(
     if (!state.weekOf || !state.rawText) {
       throw new Error("Missing submission data");
     }
-    
-    const finalTerseText = data.editedTerseVersion || data.terseText;
     
     // Mock submission - in production, call submitWAR server action
     // const result = await submitWAR({...});

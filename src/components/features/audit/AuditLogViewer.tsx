@@ -25,7 +25,6 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  Download,
   Search,
   FileJson,
   FileSpreadsheet,

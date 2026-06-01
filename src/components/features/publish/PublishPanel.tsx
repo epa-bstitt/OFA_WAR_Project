@@ -119,7 +119,7 @@ export function PublishPanel({
         });
       }
       setShowResultDialog(true);
-    } catch (error) {
+    } catch {
       setPublishResult({
         success: false,
         count: 0,

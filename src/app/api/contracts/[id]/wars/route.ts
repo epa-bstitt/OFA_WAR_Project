@@ -46,7 +46,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const summary = String(body?.summary ?? "").trim();
     const submissionId = typeof body?.submissionId === "string" ? body.submissionId : null;
-    const _historyEntryId = typeof body?.historyEntryId === "string" ? body.historyEntryId : undefined;
 
     if (!summary) {
       return NextResponse.json({ error: "Summary is required." }, { status: 400 });

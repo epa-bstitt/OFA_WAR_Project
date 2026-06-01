@@ -131,7 +131,7 @@ export function SettingsManager() {
         const error = await response.text();
         setError(error || "Failed to save settings");
       }
-    } catch (err) {
+    } catch {
       setError("Network error while saving settings");
     } finally {
       setIsSaving(false);

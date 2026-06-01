@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         // Try to reach the base URL - any response means the service is up
-        const response = await fetch(aiUrl, {
+        await fetch(aiUrl, {
           method: "HEAD",
           headers: {
             "Authorization": `Bearer ${aiKey || ""}`,

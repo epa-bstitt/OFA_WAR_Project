@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { sendWorkflowEmail } from "@/lib/notifications/email";
 // import { getContractsOutlook, MOCK_CONTRACT_ASSIGNEES } from "@/lib/mock-contracts";
 import { getCurrentSubmissionPeriod, getRecentSubmissionPeriods } from "@/lib/submission-periods";
 // import { isMockModeEnabled } from "@/lib/admin/mock-mode-server";
@@ -17,41 +16,12 @@ function serializeAuditMetadata(metadata: Record<string, unknown>): string {
   }
 }
 
-async function ensureReviewerUserRecord(sessionUser: {
-  id: string;
-  email?: string | null;
-  name?: string | null;
-  role?: string | null;
-}) {
-  const normalizedLocalPart = sessionUser.id
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, "-")
-    .slice(0, 48);
-
-  const fallbackEmail = `${normalizedLocalPart || "reviewer"}@local.demo`;
-  const fallbackAzureAdId = `local-${sessionUser.id}`;
-
-  await prisma.user.upsert({
-    where: { id: sessionUser.id },
-    update: {
-      isActive: true,
-      updatedAt: new Date(),
-    },
-    create: {
-      id: sessionUser.id,
-      email: sessionUser.email || fallbackEmail,
-      name: sessionUser.name || null,
-      azureAdId: fallbackAzureAdId,
-      role: sessionUser.role || "PROGRAM_OVERSEER",
-      isActive: true,
-    },
-  });
-}
-
 // Types matching Prisma schema
 export interface Submission {
   id: string;
   userId: string;
+  projectId?: string | null;
+  contractId?: string | null;
   weekOf: Date;
   rawText: string;
   terseVersion?: string | null;
@@ -98,8 +68,7 @@ export type SubmissionWithUser = Submission & {
 };
 
 // Ensure status property uses Prisma schema enum values
-const validStatuses = ["SUBMITTED", "IN_REVIEW", "APPROVED", "PUBLISHED", "INFO_NEEDED", "REJECTED"] as const;
-export type Status = typeof validStatuses[number];
+export type Status = "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "PUBLISHED" | "INFO_NEEDED" | "REJECTED";
 
 export interface ReviewFilters {
   contributorId?: string;
@@ -151,6 +120,19 @@ function getProfileImageForUser(userId: string): string {
 }
 
 function isLegacyContractProject(description: string | null | undefined): boolean {
+  if (!description) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(description) as { category?: string };
+    return parsed.category === "Legacy Contracts";
+  } catch {
+    return false;
+  }
+}
+
+function isLegacyProjectDescription(description: string | null | undefined): boolean {
   if (!description) {
     return false;
   }
@@ -533,10 +515,21 @@ export async function createReview(
         deletedAt: null,
         status: { in: ["SUBMITTED", "IN_REVIEW", "INFO_NEEDED"] },
       },
+      include: {
+        project: {
+          select: {
+            description: true,
+          },
+        },
+      },
     });
 
     if (!submission) {
       return { success: false, error: "Submission not found or not in a reviewable state." };
+    }
+
+    if (isLegacyProjectDescription(submission.project?.description)) {
+      return { success: false, error: "Legacy contracts are retired and cannot be reviewed or approved." };
     }
 
     // Update submission status
@@ -608,10 +601,21 @@ export async function approveSubmission(
         deletedAt: null,
         status: { in: ["SUBMITTED", "IN_REVIEW"] },
       },
+      include: {
+        project: {
+          select: {
+            description: true,
+          },
+        },
+      },
     });
 
     if (!submission) {
       return { success: false, error: "Submission not found or not reviewable" };
+    }
+
+    if (isLegacyProjectDescription(submission.project?.description)) {
+      return { success: false, error: "Legacy contracts are retired and cannot be approved." };
     }
 
     // Create review record
@@ -687,10 +691,21 @@ export async function rejectSubmission(
         deletedAt: null,
         status: { in: ["SUBMITTED", "IN_REVIEW"] },
       },
+      include: {
+        project: {
+          select: {
+            description: true,
+          },
+        },
+      },
     });
 
     if (!submission) {
       return { success: false, error: "Submission not found or not reviewable" };
+    }
+
+    if (isLegacyProjectDescription(submission.project?.description)) {
+      return { success: false, error: "Legacy contracts are retired and cannot be changed." };
     }
 
     // Create review record

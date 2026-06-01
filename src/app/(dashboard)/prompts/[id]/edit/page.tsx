@@ -11,7 +11,7 @@ interface EditPromptPageProps {
   params: { id: string };
 }
 
-export async function generateMetadata({ params }: EditPromptPageProps): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Edit Prompt Template",
     description: "Edit AI prompt template",

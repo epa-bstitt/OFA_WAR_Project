@@ -12,25 +12,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, MessageSquare, ChevronRight, ChevronLeft } from "lucide-react";
+import { CheckCircle, ChevronRight, ChevronLeft } from "lucide-react";
 import { COMMENT_TEMPLATES } from "./TerseEditor";
 
 interface ReviewActionsProps {
   submissionId: string;
   terseText: string;
   onApprove: (id: string, terseText: string, comment?: string) => Promise<void>;
-  onSkip?: () => void;
-  hasNext?: boolean;
-  hasPrev?: boolean;
 }
 
 export function ReviewActions({
   submissionId,
   terseText,
   onApprove,
-  onSkip,
-  hasNext = false,
-  hasPrev = false,
 }: ReviewActionsProps) {
   const router = useRouter();
   const [isApproving, setIsApproving] = useState(false);

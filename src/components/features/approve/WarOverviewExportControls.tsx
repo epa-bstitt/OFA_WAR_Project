@@ -82,7 +82,6 @@ export function WarOverviewExportControls({ contracts, currentPeriodId }: WarOve
     }
     contractSelectionRef.current[cat] = selection;
     // If all contracts in this section are deselected, deselect the section
-    const sectionContracts = contracts.filter(c => c.category === cat);
     if (selection.size === 0) {
       setIncludeSections(prev => ({ ...prev, [cat]: false }));
     } else if (!includeSections[cat]) {

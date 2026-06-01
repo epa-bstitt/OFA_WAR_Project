@@ -4,9 +4,7 @@ import { getCachedResult, cacheResult } from "./cache";
 
 // Default configuration from environment variables (fallback only)
 const DEFAULT_AI_SERVICE_URL = process.env.AI_SERVICE_URL || "https://internal-epa-ai.gov/api/v1/convert";
-const DEFAULT_AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || "";
 const AI_SERVICE_TIMEOUT_MS = parseInt(process.env.AI_SERVICE_TIMEOUT_MS || "5000", 10);
-const AI_SERVICE_MAX_RETRIES = parseInt(process.env.AI_SERVICE_MAX_RETRIES || "2", 10);
 
 /**
  * AI Service HTTP client for terse conversion
@@ -19,7 +17,7 @@ export async function convertToTerse(
 
   // Use provided settings or fall back to defaults
   const serviceUrl = options?.serviceSettings?.serviceUrl || DEFAULT_AI_SERVICE_URL;
-  const apiKey = options?.serviceSettings?.apiKey || DEFAULT_AI_SERVICE_API_KEY;
+  const apiKey = options?.serviceSettings?.apiKey || process.env.AI_SERVICE_API_KEY || "";
 
   // Check cache first
   const cached = getCachedResult(rawText, options?.promptTemplateId);

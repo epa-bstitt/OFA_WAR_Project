@@ -12,7 +12,7 @@ import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { auth } from "@/lib/auth";
 import { MockModeToggle } from "@/components/features/admin/MockModeToggle";
 import { isMockModeEnabled } from "@/lib/admin/mock-mode-server";
-import { mockAuditLogs, mockAuditStats, auditActions, resourceTypes } from "@/lib/admin/mock-data";
+import { mockAuditLogs, auditActions, resourceTypes } from "@/lib/admin/mock-data";
 
 export const metadata: Metadata = {
   title: "My Submissions",

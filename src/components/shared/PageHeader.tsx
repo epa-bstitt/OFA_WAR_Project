@@ -11,8 +11,6 @@ interface PageHeaderProps {
   description?: string;
   children?: React.ReactNode;
   className?: string;
-  section?: string;
-  breadcrumbs?: PageHeaderLink[];
   quickLinks?: PageHeaderLink[];
 }
 
@@ -21,8 +19,6 @@ export function PageHeader({
   description,
   children,
   className,
-  section,
-  breadcrumbs,
   quickLinks,
 }: PageHeaderProps) {
   return (

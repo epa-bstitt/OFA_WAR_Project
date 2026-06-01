@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   CheckCircle, 
   Circle, 
@@ -69,7 +68,6 @@ export function TeamsBotWizard() {
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState(initialSteps);
   const [config, setConfig] = useState(defaultConfig);
-  const [showPreview, setShowPreview] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const updateStep = (index: number, completed: boolean) => {
@@ -622,7 +620,7 @@ AZURE_AD_B2C_PRIMARY_USER_FLOW=B2C_1_signupsignin1`}
         </ol>
 
         <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-          <h5 className="font-medium text-green-800">You're All Set!</h5>
+          <h5 className="font-medium text-green-800">You&apos;re All Set!</h5>
           <p className="text-sm text-green-700">
             Your Teams bot should now be fully configured and ready to accept WAR submissions.
           </p>

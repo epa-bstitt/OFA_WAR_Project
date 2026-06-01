@@ -37,7 +37,6 @@ import {
   CheckCircle,
   XCircle,
   Download,
-  FileSpreadsheet,
   Eye,
   ChevronDown,
   ChevronUp,
@@ -206,7 +205,7 @@ export function ApprovalDashboard({
               No submissions are currently awaiting approval.
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              You've approved {stats.approvedThisWeek} WARs this week.
+              You&apos;ve approved {stats.approvedThisWeek} WARs this week.
             </p>
           </CardContent>
         </Card>

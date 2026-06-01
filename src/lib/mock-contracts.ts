@@ -16,6 +16,13 @@ export interface ActiveContractDetails {
   co: string;
   cs: string;
   orderNumber: string;
+  categorySwitch?: string;
+  palt?: string;
+  paltProcurementType?: string;
+  paltDollarValue?: string;
+  paltBeginOitoEngagement?: string;
+  paltOitoEngagement?: string;
+  paltMilestones?: string;
 }
 
 export interface MockContract {
@@ -47,6 +54,12 @@ export interface ContractFormInput {
   co: string;
   cs: string;
   orderNumber: string;
+  palt?: string;
+  paltProcurementType?: string;
+  paltDollarValue?: string;
+  paltBeginOitoEngagement?: string;
+  paltOitoEngagement?: string;
+  paltMilestones?: string;
   category?: string;
   assigneeIds?: string[];
 }

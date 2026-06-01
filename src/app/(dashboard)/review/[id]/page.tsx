@@ -12,7 +12,7 @@ interface ReviewDetailPageProps {
   params: { id: string };
 }
 
-export async function generateMetadata({ params }: ReviewDetailPageProps): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Review Submission",
     description: "Review and edit WAR submission",

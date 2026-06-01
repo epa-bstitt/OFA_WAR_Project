@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import { ChevronDown, ExternalLink, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { ChevronDown, Plus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { MOCK_CONTRACT_ASSIGNEES, type MockContract, type MockContractSubmission } from "@/lib/mock-contracts";
 import { Button } from "@/components/ui/button";
@@ -427,7 +426,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
     return isoDate.test(trimmed);
   }
 
-  function validateForm(mode: FormMode): Partial<Record<keyof ContractFormState, string>> {
+  function validateForm(): Partial<Record<keyof ContractFormState, string>> {
     const nextErrors: Partial<Record<keyof ContractFormState, string>> = {};
 
     if (!isAcceptedDateInput(formState.nextPeriodOfPerf)) {
@@ -522,7 +521,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const validationErrors = validateForm(formMode);
+    const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setFieldErrors(validationErrors);
       setError("Please fix highlighted fields before saving.");
@@ -751,7 +750,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={addAssigneeFromSearch}
                       >
-                        Add "{assigneeSearch.trim()}"
+                        Add &quot;{assigneeSearch.trim()}&quot;
                       </button>
                     ) : (
                       availableAssigneeOptions.map((option) => (

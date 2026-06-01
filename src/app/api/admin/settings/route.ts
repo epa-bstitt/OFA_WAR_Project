@@ -3,9 +3,6 @@ import { auth } from "@/lib/auth";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { getStoredSettings, setStoredSettings } from "./store";
 
-// In-memory settings store (replace with database in production)
-let systemSettings: Record<string, unknown> = {};
-
 /**
  * GET /api/admin/settings
  * Retrieve current system settings

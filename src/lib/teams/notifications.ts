@@ -1,4 +1,4 @@
-import { CardFactory, TurnContext } from "botbuilder";
+import { TurnContext } from "botbuilder";
 import { prisma } from "@/lib/db";
 import { getBotAdapter } from "./bot";
 import type { ConversationReference } from "botbuilder";
@@ -12,16 +12,6 @@ export type NotificationType =
   | "SUBMISSION_APPROVED"
   | "SUBMISSION_REJECTED"
   | "SUBMISSION_PUBLISHED";
-
-interface NotificationPayload {
-  userId: string;
-  type: NotificationType;
-  submissionId: string;
-  weekOf?: string;
-  approverName?: string;
-  rejectionReason?: string;
-  oneNoteUrl?: string;
-}
 
 /**
  * Store conversation reference when user interacts with bot

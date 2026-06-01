@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { EPALogo } from "./EPALogo";
 import { UserMenu } from "./UserMenu";
-import { NAV_ITEMS, Role, hasMinimumRole } from "@/config/navigation";
+import { NAV_ITEMS, Role } from "@/config/navigation";
 
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") {

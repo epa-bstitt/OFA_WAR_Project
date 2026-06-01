@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -177,6 +177,166 @@ const cardThemes: Record<string, { shell: string; panel: string; badge: string }
 
 const RECOMPETES_CATEGORY = "New Awards and Recompetes";
 const LEGACY_CATEGORY = "Legacy Contracts";
+const PALT_MODE = "PALT";
+
+type PaltMilestoneRow = {
+  id: number;
+  milestone: string;
+  dueDate: string;
+  days: string;
+};
+
+const PALT_PROCUREMENT_TYPES = [
+  "Simplified Acquisitions Procedures",
+  "FSS/GSA Order Including BPA Orders (no SOW)",
+  "FSS/GSA Order Including BPA Orders (w/SOW)",
+  "Sealed Bids Including 2 Step",
+  "Competitive Proposals (RFP)",
+];
+
+const PALT_DOLLAR_VALUES = [
+  "Micropurchase",
+  "Above Micro & Under SAT",
+  "Over SAT",
+  "Above SAT-$6.5M (Commercial Test Procedures)",
+  "Up to $1M",
+  "Above $1M up to $10M",
+  "Over $10M",
+];
+
+const DEFAULT_PALT_DAYS = [30, 30, 15, 15, 15, 15, 30];
+
+const PALT_STANDARDS: Record<string, number[]> = {
+  "Simplified Acquisitions Procedures|Micropurchase": [5, 5, 5, 5, 0, 0, 5],
+  "Simplified Acquisitions Procedures|Above Micro & Under SAT": [15, 15, 10, 10, 7, 8, 10],
+  "Simplified Acquisitions Procedures|Above SAT-$6.5M (Commercial Test Procedures)": [45, 45, 30, 20, 15, 15, 30],
+  "FSS/GSA Order Including BPA Orders (no SOW)|Micropurchase": [5, 5, 5, 5, 5, 5, 10],
+  "FSS/GSA Order Including BPA Orders (no SOW)|Above Micro & Under SAT": [15, 15, 10, 10, 10, 5, 10],
+  "FSS/GSA Order Including BPA Orders (no SOW)|Over SAT": [30, 30, 15, 15, 15, 15, 30],
+  "FSS/GSA Order Including BPA Orders (w/SOW)|Micropurchase": [5, 5, 5, 5, 5, 5, 10],
+  "FSS/GSA Order Including BPA Orders (w/SOW)|Above Micro & Under SAT": [15, 15, 10, 10, 10, 10, 15],
+  "FSS/GSA Order Including BPA Orders (w/SOW)|Over SAT": [45, 45, 15, 15, 15, 15, 30],
+  "Sealed Bids Including 2 Step|Up to $1M": [30, 30, 15, 30, 15, 15, 15],
+  "Sealed Bids Including 2 Step|Above $1M up to $10M": [45, 45, 30, 30, 30, 30, 30],
+  "Sealed Bids Including 2 Step|Over $10M": [60, 60, 30, 45, 45, 30, 30],
+  "Competitive Proposals (RFP)|Up to $1M": [45, 45, 30, 30, 15, 15, 30],
+  "Competitive Proposals (RFP)|Above $1M up to $10M": [60, 60, 30, 30, 30, 30, 30],
+  "Competitive Proposals (RFP)|Over $10M": [90, 60, 45, 30, 45, 30, 60],
+};
+
+function formatDateInput(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function addDaysToIso(startDate: string, daysToAdd: number) {
+  const parsed = new Date(startDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  parsed.setDate(parsed.getDate() + daysToAdd);
+  return formatDateInput(parsed);
+}
+
+function diffDays(fromDate: string, toDate: string) {
+  const from = new Date(fromDate);
+  const to = new Date(toDate);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return "";
+  }
+
+  return String(Math.max(0, Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24))));
+}
+
+function getPaltStandardDays(procurementType?: string, dollarValue?: string) {
+  const key = `${procurementType || ""}|${dollarValue || ""}`;
+  return PALT_STANDARDS[key] || DEFAULT_PALT_DAYS;
+}
+
+function buildPaltMilestones(details: ActiveContractDetails): PaltMilestoneRow[] {
+  if (details.paltMilestones?.trim()) {
+    try {
+      const parsed = JSON.parse(details.paltMilestones) as PaltMilestoneRow[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch {
+      // Fallback to generated values.
+    }
+  }
+
+  const beginDate = details.paltBeginOitoEngagement || "";
+  const oitoDate = details.paltOitoEngagement || "";
+  const standardDays = getPaltStandardDays(details.paltProcurementType, details.paltDollarValue);
+
+  const rows: PaltMilestoneRow[] = [
+    {
+      id: 0,
+      milestone: "Begin OITO Engagement",
+      dueDate: beginDate,
+      days: "",
+    },
+    {
+      id: 1,
+      milestone: "OITO Engagement",
+      dueDate: oitoDate,
+      days: beginDate && oitoDate ? diffDays(beginDate, oitoDate) : "",
+    },
+  ];
+
+  const milestoneNames = [
+    "Acquisition Planning Complete",
+    "Procurement Package Complete",
+    "Solicitation Issued",
+    "Proposals Received",
+    "Tech Evaluations Complete",
+    "Final Proposals Received",
+    "Award Complete",
+  ];
+
+  let runningDate = oitoDate || beginDate;
+
+  milestoneNames.forEach((name, index) => {
+    const days = standardDays[index] ?? 0;
+    const dueDate = runningDate ? addDaysToIso(runningDate, days) : "";
+    if (dueDate) {
+      runningDate = dueDate;
+    }
+
+    rows.push({
+      id: index + 2,
+      milestone: name,
+      dueDate,
+      days: String(days),
+    });
+  });
+
+  return rows;
+}
+
+function getInitialCategorySwitch(contract: MockContract) {
+  if (contract.activeContract.categorySwitch) {
+    return contract.activeContract.categorySwitch;
+  }
+
+  if (
+    contract.activeContract.paltProcurementType ||
+    contract.activeContract.paltDollarValue ||
+    contract.activeContract.paltMilestones
+  ) {
+    return PALT_MODE;
+  }
+
+  if (contract.category === RECOMPETES_CATEGORY) {
+    return "RECOMPETES";
+  }
+
+  return "CURRENT";
+}
+
+function isContributorVisibleContract(category: string) {
+  return category !== LEGACY_CATEGORY && category !== "Completed";
+}
 
 function getCurrentTableLabel(category: string) {
   if (category === RECOMPETES_CATEGORY) {
@@ -200,6 +360,13 @@ export function ContractUpdateCards({
   userRole = "contributor", // "contributor" or "overseer"; default to contributor for demo
 }: ContractUpdateCardsProps & { userRole?: "contributor" | "overseer" }) {
   const router = useRouter();
+  const visibleContracts = useMemo(
+    () =>
+      userRole === "contributor"
+        ? contracts.filter((contract) => isContributorVisibleContract(contract.category))
+        : contracts,
+    [contracts, userRole]
+  );
   const referenceNow = useMemo(() => new Date(), []);
   const submissionWindowOpen = useMemo(
     () => isSubmissionWindowOpen(referenceNow),
@@ -224,7 +391,7 @@ export function ContractUpdateCards({
   const initialDrafts = useMemo<Record<string, DraftState>>(
     () =>
       Object.fromEntries(
-        contracts.map((contract) => {
+        visibleContracts.map((contract) => {
           const currentCycleEntry = contract.history.find((entry) => {
             const submittedAt = new Date(entry.submittedAt);
             return submittedAt >= currentPeriod.start && submittedAt <= currentPeriod.end;
@@ -254,7 +421,7 @@ export function ContractUpdateCards({
           ];
         })
       ),
-    [contracts, currentPeriod.id, schedulingOverrideActive, submissionWindowOpen]
+    [visibleContracts, currentPeriod.id, schedulingOverrideActive, submissionWindowOpen]
   );
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(initialDrafts);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
@@ -264,22 +431,41 @@ export function ContractUpdateCards({
   const [selectedActiveContractId, setSelectedActiveContractId] = useState<string | null>(null);
   const [isSavingActiveContract, setIsSavingActiveContract] = useState(false);
   const [activeContractSaveError, setActiveContractSaveError] = useState<string | null>(null);
+  const paltAutosaveSignatureRef = useRef<string | null>(null);
   const [activeContracts, setActiveContracts] = useState<ActiveContractState>(
-    Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract]))
+    Object.fromEntries(
+      visibleContracts.map((contract) => [
+        contract.id,
+        {
+          ...contract.activeContract,
+          categorySwitch: getInitialCategorySwitch(contract),
+        },
+      ])
+    )
   );
 
   useEffect(() => {
     setDrafts(initialDrafts);
-    setActiveContracts(Object.fromEntries(contracts.map((contract) => [contract.id, contract.activeContract])));
-  }, [contracts, initialDrafts]);
+    setActiveContracts(
+      Object.fromEntries(
+        visibleContracts.map((contract) => [
+          contract.id,
+          {
+            ...contract.activeContract,
+            categorySwitch: getInitialCategorySwitch(contract),
+          },
+        ])
+      )
+    );
+  }, [visibleContracts, initialDrafts]);
 
   const selectedContract =
-    contracts.find((contract) => contract.id === selectedContractId) ?? null;
+    visibleContracts.find((contract) => contract.id === selectedContractId) ?? null;
   const selectedActiveContract = selectedActiveContractId
     ? activeContracts[selectedActiveContractId]
     : null;
 
-  const firstContractId = contracts[0]?.id ?? null;
+  const firstContractId = visibleContracts[0]?.id ?? null;
 
   const isWalkthroughOpen = walkthroughVariant !== null;
 
@@ -548,7 +734,7 @@ export function ContractUpdateCards({
   }
 
   function carryForwardPreviousWeek(contractId: string) {
-    const contract = contracts.find((item) => item.id === contractId);
+    const contract = visibleContracts.find((item) => item.id === contractId);
 
     if (!contract) {
       return;
@@ -698,7 +884,7 @@ export function ContractUpdateCards({
     }));
   }
 
-  async function saveActiveContractDetails() {
+  const saveActiveContractDetails = useCallback(async ({ closeOnSuccess = true }: { closeOnSuccess?: boolean } = {}) => {
     if (!selectedActiveContractId || !selectedActiveContract) {
       return;
     }
@@ -707,7 +893,7 @@ export function ContractUpdateCards({
     setActiveContractSaveError(null);
 
     try {
-      const selectedContractFromList = contracts.find((contract) => contract.id === selectedActiveContractId);
+      const selectedContractFromList = visibleContracts.find((contract) => contract.id === selectedActiveContractId);
 
       const response = await fetch(`/api/contracts/${selectedActiveContractId}`, {
         method: "PUT",
@@ -722,6 +908,12 @@ export function ContractUpdateCards({
           co: selectedActiveContract.co,
           cs: selectedActiveContract.cs,
           orderNumber: selectedActiveContract.orderNumber,
+          palt: selectedActiveContract.palt || "",
+          paltProcurementType: selectedActiveContract.paltProcurementType || "",
+          paltDollarValue: selectedActiveContract.paltDollarValue || "",
+          paltBeginOitoEngagement: selectedActiveContract.paltBeginOitoEngagement || "",
+          paltOitoEngagement: selectedActiveContract.paltOitoEngagement || "",
+          paltMilestones: selectedActiveContract.paltMilestones || "",
           category: selectedContractFromList?.category ?? "Contract",
         }),
       });
@@ -731,13 +923,78 @@ export function ContractUpdateCards({
         throw new Error(payload?.error || "Failed to save active contract details.");
       }
 
-      setSelectedActiveContractId(null);
+      if (closeOnSuccess) {
+        setSelectedActiveContractId(null);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save active contract details.";
       setActiveContractSaveError(message);
     } finally {
       setIsSavingActiveContract(false);
     }
+  }, [selectedActiveContractId, selectedActiveContract, visibleContracts]);
+
+  useEffect(() => {
+    if (!selectedActiveContractId || !selectedActiveContract) {
+      paltAutosaveSignatureRef.current = null;
+      return;
+    }
+
+    if (userRole !== "contributor" || selectedActiveContract.categorySwitch !== PALT_MODE) {
+      paltAutosaveSignatureRef.current = null;
+      return;
+    }
+
+    const signature = JSON.stringify({
+      paltProcurementType: selectedActiveContract.paltProcurementType || "",
+      paltDollarValue: selectedActiveContract.paltDollarValue || "",
+      paltBeginOitoEngagement: selectedActiveContract.paltBeginOitoEngagement || "",
+      paltOitoEngagement: selectedActiveContract.paltOitoEngagement || "",
+      paltMilestones: selectedActiveContract.paltMilestones || "",
+    });
+
+    if (!paltAutosaveSignatureRef.current) {
+      paltAutosaveSignatureRef.current = signature;
+      return;
+    }
+
+    if (paltAutosaveSignatureRef.current === signature) {
+      return;
+    }
+
+    paltAutosaveSignatureRef.current = signature;
+
+    const timer = window.setTimeout(() => {
+      void saveActiveContractDetails({ closeOnSuccess: false });
+    }, 800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [selectedActiveContractId, selectedActiveContract, userRole, saveActiveContractDetails]);
+
+  function updatePaltMilestone(
+    contractId: string,
+    rowIndex: number,
+    field: "dueDate" | "days",
+    value: string
+  ) {
+    const current = activeContracts[contractId];
+    if (!current) {
+      return;
+    }
+
+    const rows = buildPaltMilestones(current);
+    const nextRows = rows.map((row, index) =>
+      index === rowIndex
+        ? {
+            ...row,
+            [field]: value,
+          }
+        : row
+    );
+
+    updateActiveContractField(contractId, "paltMilestones", JSON.stringify(nextRows));
   }
 
   function renderBasicLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
@@ -1117,7 +1374,7 @@ export function ContractUpdateCards({
       </div>
 
       <CardGrid columns={2} gap="lg">
-        {contracts.map((contract, index) => {
+        {visibleContracts.map((contract, index) => {
           const isFirstCard = index === 0;
           const draft = drafts[contract.id] ?? {
             submissionMode: "SIMPLE",
@@ -1427,7 +1684,7 @@ export function ContractUpdateCards({
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle>{selectedActiveContract.contractName || "Contract Details"}</DialogTitle>
-                {/* Category Switch Dropdown on the right */}
+                {/* Contributor controls */}
                 <div className="flex items-center gap-2 mr-10">
                   <Select
                     value={selectedActiveContract.categorySwitch || "CURRENT"}
@@ -1441,6 +1698,9 @@ export function ContractUpdateCards({
                     <SelectContent>
                       <SelectItem value="RECOMPETES">New Awards and Recompetes</SelectItem>
                       <SelectItem value="CURRENT">Current and Active Contracts/Purchase Order Outlook</SelectItem>
+                      {userRole === "contributor" ? (
+                        <SelectItem value={PALT_MODE}>PALT</SelectItem>
+                      ) : null}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1452,10 +1712,122 @@ export function ContractUpdateCards({
 
             {/* Modal content changes based on dropdown selection */}
             <div className="grid gap-4 md:grid-cols-2">
-              {selectedActiveContract.categorySwitch === "RECOMPETES" ? (
+              {selectedActiveContract.categorySwitch === PALT_MODE ? (
+                <>
+                  <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">PALT Inputs</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-500">Procurement Type</p>
+                    <Select
+                      value={selectedActiveContract.paltProcurementType || undefined}
+                      onValueChange={(value) => {
+                        updateActiveContractField(selectedActiveContractId, "paltProcurementType", value);
+                        updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select procurement type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PALT_PROCUREMENT_TYPES.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-500">Dollar Value</p>
+                    <Select
+                      value={selectedActiveContract.paltDollarValue || undefined}
+                      onValueChange={(value) => {
+                        updateActiveContractField(selectedActiveContractId, "paltDollarValue", value);
+                        updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select dollar value" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PALT_DOLLAR_VALUES.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-500">Begin OITO Engagement</p>
+                    <Input
+                      type="date"
+                      value={selectedActiveContract.paltBeginOitoEngagement || ""}
+                      onChange={(event) => {
+                        updateActiveContractField(selectedActiveContractId, "paltBeginOitoEngagement", event.target.value);
+                        updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-500">OITO Engagement</p>
+                    <Input
+                      type="date"
+                      value={selectedActiveContract.paltOitoEngagement || ""}
+                      onChange={(event) => {
+                        updateActiveContractField(selectedActiveContractId, "paltOitoEngagement", event.target.value);
+                        updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
+                      }}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 overflow-hidden rounded-lg border border-slate-200">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-100 text-slate-700">
+                        <tr>
+                          <th className="px-2 py-2 text-left">#</th>
+                          <th className="px-2 py-2 text-left">Milestone</th>
+                          <th className="px-2 py-2 text-left">Due Date</th>
+                          <th className="px-2 py-2 text-left"># Milestones Days</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {buildPaltMilestones(selectedActiveContract).map((row, index) => (
+                          <tr key={`${row.id}-${row.milestone}`} className="border-t border-slate-200">
+                            <td className="px-2 py-2 text-slate-600">{row.id}</td>
+                            <td className="px-2 py-2 text-slate-800">{row.milestone}</td>
+                            <td className="px-2 py-2">
+                              <Input
+                                type="date"
+                                value={row.dueDate}
+                                onChange={(event) =>
+                                  updatePaltMilestone(selectedActiveContractId, index, "dueDate", event.target.value)
+                                }
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <Input
+                                type="number"
+                                value={row.days}
+                                onChange={(event) =>
+                                  updatePaltMilestone(selectedActiveContractId, index, "days", event.target.value)
+                                }
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : selectedActiveContract.categorySwitch === "RECOMPETES" ? (
                 <>
                   {(() => {
-                    const isOnTable = contracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "New Awards and Recompetes");
+                    const isOnTable = visibleContracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "New Awards and Recompetes");
                     const isLocked = userRole === "contributor" && !isOnTable;
                     const labels: Record<string, string> = {
                       contractName: "Upcoming Procurement",
@@ -1467,6 +1839,11 @@ export function ContractUpdateCards({
                       co: "CO",
                       cs: "CS",
                       orderNumber: "Order Number",
+                      paltProcurementType: "PALT Procurement Type",
+                      paltDollarValue: "PALT Dollar Value",
+                      paltBeginOitoEngagement: "Begin OITO Engagement",
+                      paltOitoEngagement: "OITO Engagement",
+                      paltMilestones: "PALT Milestones",
                       solicitationNumber: "Solicitation Number",
                       anticipatedAwardDate: "Anticipated Award Date",
                       notes: "Notes"
@@ -1479,7 +1856,18 @@ export function ContractUpdateCards({
                           </div>
                         )}
                         {Object.entries(selectedActiveContract).map(([key, value]) => {
-                          if (["id", "categorySwitch"].includes(key)) return null;
+                          if (
+                            [
+                              "id",
+                              "categorySwitch",
+                              "palt",
+                              "paltProcurementType",
+                              "paltDollarValue",
+                              "paltBeginOitoEngagement",
+                              "paltOitoEngagement",
+                              "paltMilestones",
+                            ].includes(key)
+                          ) return null;
                           return (
                             <div className="space-y-2" key={key}>
                               <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
@@ -1499,7 +1887,7 @@ export function ContractUpdateCards({
               ) : (
                 <>
                   {(() => {
-                    const isOnTable = contracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "Current and Active Contracts/Purchase Order Outlook");
+                    const isOnTable = visibleContracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "Current and Active Contracts/Purchase Order Outlook");
                     const isLocked = userRole === "contributor" && !isOnTable;
                     const labels: Record<string, string> = {
                       contractName: "Contract Name",
@@ -1511,6 +1899,11 @@ export function ContractUpdateCards({
                       co: "CO",
                       cs: "CS",
                       orderNumber: "Order Number",
+                      paltProcurementType: "PALT Procurement Type",
+                      paltDollarValue: "PALT Dollar Value",
+                      paltBeginOitoEngagement: "Begin OITO Engagement",
+                      paltOitoEngagement: "OITO Engagement",
+                      paltMilestones: "PALT Milestones",
                       solicitationNumber: "Solicitation Number",
                       anticipatedAwardDate: "Anticipated Award Date",
                       notes: "Notes"
@@ -1523,7 +1916,18 @@ export function ContractUpdateCards({
                           </div>
                         )}
                         {Object.entries(selectedActiveContract).map(([key, value]) => {
-                          if (["id", "categorySwitch"].includes(key)) return null;
+                          if (
+                            [
+                              "id",
+                              "categorySwitch",
+                              "palt",
+                              "paltProcurementType",
+                              "paltDollarValue",
+                              "paltBeginOitoEngagement",
+                              "paltOitoEngagement",
+                              "paltMilestones",
+                            ].includes(key)
+                          ) return null;
                           return (
                             <div className="space-y-2" key={key}>
                               <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>

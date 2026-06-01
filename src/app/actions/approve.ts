@@ -52,6 +52,19 @@ const ROLE_HIERARCHY: Record<string, number> = {
   CONTRIBUTOR: 1,
 };
 
+function isLegacyProjectDescription(description: string | null | undefined): boolean {
+  if (!description) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(description) as { category?: string };
+    return parsed.category === "Legacy Contracts";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Server Action: Get submissions in IN_REVIEW status for approval
  * Only accessible by PROGRAM_OVERSEER and ADMINISTRATOR roles
@@ -295,10 +308,21 @@ export async function approveSubmission(
         status: "IN_REVIEW",
         deletedAt: null,
       },
+      include: {
+        project: {
+          select: {
+            description: true,
+          },
+        },
+      },
     });
 
     if (!submission) {
       return { success: false, error: "Submission not found or not in review" };
+    }
+
+    if (isLegacyProjectDescription(submission.project?.description)) {
+      return { success: false, error: "Legacy contracts are retired and cannot be approved." };
     }
 
     // Update submission status to APPROVED
@@ -374,10 +398,21 @@ export async function rejectSubmission(
         status: "IN_REVIEW",
         deletedAt: null,
       },
+      include: {
+        project: {
+          select: {
+            description: true,
+          },
+        },
+      },
     });
 
     if (!submission) {
       return { success: false, error: "Submission not found or not in review" };
+    }
+
+    if (isLegacyProjectDescription(submission.project?.description)) {
+      return { success: false, error: "Legacy contracts are retired and cannot be changed." };
     }
 
     // Update submission status back to SUBMITTED

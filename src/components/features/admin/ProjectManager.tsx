@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,12 +37,9 @@ import { Plus, Trash2, Users, FolderKanban, Layers } from "lucide-react";
 import { toast } from "sonner";
 import type {
   Project,
-  ProjectComponent,
-  ProjectAssignment,
 } from "@/app/actions/admin/projects";
 import {
   createProject,
-  updateProject,
   deleteProject,
   createComponent,
   deleteComponent,
@@ -200,15 +197,6 @@ export function ProjectManager({ initialProjects, users }: ProjectManagerProps) 
       toast.error((result as { success: false; error: string }).error || "Failed to remove assignment");
     }
   };
-
-  const refreshProjects = useCallback(async () => {
-    // Re-fetch projects
-    const response = await fetch("/api/admin/projects");
-    if (response.ok) {
-      const data = await response.json();
-      setProjects(data.projects);
-    }
-  }, []);
 
   return (
     <div className="space-y-6">

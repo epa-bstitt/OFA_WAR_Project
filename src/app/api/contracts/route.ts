@@ -47,6 +47,12 @@ export async function POST(request: NextRequest) {
         co: String(body?.co ?? ""),
         cs: String(body?.cs ?? ""),
         orderNumber: String(body?.orderNumber ?? ""),
+        palt: String(body?.palt ?? ""),
+        paltProcurementType: String(body?.paltProcurementType ?? ""),
+        paltDollarValue: String(body?.paltDollarValue ?? ""),
+        paltBeginOitoEngagement: String(body?.paltBeginOitoEngagement ?? ""),
+        paltOitoEngagement: String(body?.paltOitoEngagement ?? ""),
+        paltMilestones: String(body?.paltMilestones ?? ""),
         category: String(body?.category ?? "Contract"),
         assigneeIds: Array.isArray(body?.assigneeIds)
           ? body.assigneeIds.map((value: unknown) => String(value))

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isFuture, isWeekValid, getWeekDate, getCurrentWeek, getISOWeekYear } from "@/lib/date-utils";
+import { isFuture, isWeekValid, getCurrentWeek, getISOWeekYear } from "@/lib/date-utils";
 
 /**
  * Zod schema for WAR submission validation

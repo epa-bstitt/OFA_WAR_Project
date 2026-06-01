@@ -22,6 +22,12 @@ interface ContractMetadata {
     co?: string;
     cs?: string;
     orderNumber?: string;
+    palt?: string;
+    paltProcurementType?: string;
+    paltDollarValue?: string;
+    paltBeginOitoEngagement?: string;
+    paltOitoEngagement?: string;
+    paltMilestones?: string;
   };
   imageUrl?: string;
   imageAlt?: string;
@@ -57,6 +63,12 @@ function parseMetadata(project: { name: string; description: string | null }): R
       co: "",
       cs: "",
       orderNumber: "",
+      palt: "",
+      paltProcurementType: "",
+      paltDollarValue: "",
+      paltBeginOitoEngagement: "",
+      paltOitoEngagement: "",
+      paltMilestones: "",
     },
     imageUrl: DEFAULT_IMAGE_URL,
     imageAlt: DEFAULT_IMAGE_ALT,
@@ -81,6 +93,12 @@ function parseMetadata(project: { name: string; description: string | null }): R
         co: parsed.activeContract?.co ?? "",
         cs: parsed.activeContract?.cs ?? "",
         orderNumber: parsed.activeContract?.orderNumber ?? "",
+        palt: parsed.activeContract?.palt ?? "",
+        paltProcurementType: parsed.activeContract?.paltProcurementType ?? "",
+        paltDollarValue: parsed.activeContract?.paltDollarValue ?? "",
+        paltBeginOitoEngagement: parsed.activeContract?.paltBeginOitoEngagement ?? "",
+        paltOitoEngagement: parsed.activeContract?.paltOitoEngagement ?? "",
+        paltMilestones: parsed.activeContract?.paltMilestones ?? "",
       },
       imageUrl: parsed.imageUrl ?? fallback.imageUrl,
       imageAlt: parsed.imageAlt ?? fallback.imageAlt,
@@ -104,11 +122,34 @@ function buildMetadata(input: ContractFormInput) {
       co: input.co,
       cs: input.cs,
       orderNumber: input.orderNumber,
+      palt: input.palt ?? "",
+      paltProcurementType: input.paltProcurementType ?? "",
+      paltDollarValue: input.paltDollarValue ?? "",
+      paltBeginOitoEngagement: input.paltBeginOitoEngagement ?? "",
+      paltOitoEngagement: input.paltOitoEngagement ?? "",
+      paltMilestones: input.paltMilestones ?? "",
     },
     imageUrl: DEFAULT_IMAGE_URL,
     imageAlt: DEFAULT_IMAGE_ALT,
     currentUpdatePlaceholder: `Add this week's ${input.contractName} contract update here.`,
   });
+}
+
+function normalizeAssigneeIds(assigneeIds?: string[]) {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const value of assigneeIds ?? []) {
+    const id = value.trim();
+    if (!id || seen.has(id)) {
+      continue;
+    }
+
+    seen.add(id);
+    normalized.push(id);
+  }
+
+  return normalized;
 }
 
 function mapSubmissionToWarEntry(submission: {
@@ -415,6 +456,12 @@ async function fetchContracts() {
         co: metadata.activeContract.co,
         cs: metadata.activeContract.cs,
         orderNumber: metadata.activeContract.orderNumber,
+        palt: metadata.activeContract.palt,
+        paltProcurementType: metadata.activeContract.paltProcurementType,
+        paltDollarValue: metadata.activeContract.paltDollarValue,
+        paltBeginOitoEngagement: metadata.activeContract.paltBeginOitoEngagement,
+        paltOitoEngagement: metadata.activeContract.paltOitoEngagement,
+        paltMilestones: metadata.activeContract.paltMilestones,
       },
       previousWeekLabel: latest ? `Week of ${latest.weekOf}` : "Week of N/A",
       previousWeekSubmission: latest?.summary ?? "No prior submission yet.",
@@ -450,9 +497,9 @@ export async function getContractByIdFromDb(contractId: string): Promise<MockCon
 }
 
 export async function createContractInDb(input: ContractFormInput): Promise<MockContract> {
-  const primaryAssigneeId = input.assigneeIds?.[0]?.trim() || null;
-  if (primaryAssigneeId) {
-    await ensureUserRecord(primaryAssigneeId, primaryAssigneeId, null);
+  const normalizedAssigneeIds = normalizeAssigneeIds(input.assigneeIds);
+  for (const assigneeId of normalizedAssigneeIds) {
+    await ensureUserRecord(assigneeId, assigneeId, null);
   }
 
   const created = await prisma.project.create({
@@ -463,13 +510,14 @@ export async function createContractInDb(input: ContractFormInput): Promise<Mock
     },
   });
 
-  if (primaryAssigneeId) {
-    await prisma.projectAssignment.create({
-      data: {
-        userId: primaryAssigneeId,
+  if (normalizedAssigneeIds.length > 0) {
+    await prisma.projectAssignment.createMany({
+      data: normalizedAssigneeIds.map((assigneeId) => ({
+        userId: assigneeId,
         projectId: created.id,
         componentId: null,
-      },
+      })),
+      skipDuplicates: true,
     });
   }
 
@@ -487,9 +535,9 @@ export async function updateContractInDb(contractId: string, input: ContractForm
     return null;
   }
 
-  const primaryAssigneeId = input.assigneeIds?.[0]?.trim() || null;
-  if (primaryAssigneeId) {
-    await ensureUserRecord(primaryAssigneeId, primaryAssigneeId, null);
+  const normalizedAssigneeIds = normalizeAssigneeIds(input.assigneeIds);
+  for (const assigneeId of normalizedAssigneeIds) {
+    await ensureUserRecord(assigneeId, assigneeId, null);
   }
 
   await prisma.project.update({
@@ -507,15 +555,57 @@ export async function updateContractInDb(contractId: string, input: ContractForm
     },
   });
 
-  if (primaryAssigneeId) {
-    await prisma.projectAssignment.create({
-      data: {
-        userId: primaryAssigneeId,
+  if (normalizedAssigneeIds.length > 0) {
+    await prisma.projectAssignment.createMany({
+      data: normalizedAssigneeIds.map((assigneeId) => ({
+        userId: assigneeId,
         projectId: contractId,
         componentId: null,
-      },
+      })),
+      skipDuplicates: true,
     });
   }
+
+  return getContractByIdFromDb(contractId);
+}
+
+export async function updateContractPaltTrackingInDb(
+  contractId: string,
+  input: Pick<
+    ContractFormInput,
+    "palt" | "paltProcurementType" | "paltDollarValue" | "paltBeginOitoEngagement" | "paltOitoEngagement" | "paltMilestones"
+  >
+): Promise<MockContract | null> {
+  const existing = await prisma.project.findUnique({
+    where: { id: contractId },
+    select: { id: true, name: true, description: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const metadata = parseMetadata({ name: existing.name, description: existing.description });
+  const nextMetadata = {
+    ...metadata,
+    activeContract: {
+      ...metadata.activeContract,
+      palt: input.palt ?? metadata.activeContract.palt,
+      paltProcurementType: input.paltProcurementType ?? metadata.activeContract.paltProcurementType,
+      paltDollarValue: input.paltDollarValue ?? metadata.activeContract.paltDollarValue,
+      paltBeginOitoEngagement:
+        input.paltBeginOitoEngagement ?? metadata.activeContract.paltBeginOitoEngagement,
+      paltOitoEngagement: input.paltOitoEngagement ?? metadata.activeContract.paltOitoEngagement,
+      paltMilestones: input.paltMilestones ?? metadata.activeContract.paltMilestones,
+    },
+  };
+
+  await prisma.project.update({
+    where: { id: contractId },
+    data: {
+      description: JSON.stringify(nextMetadata),
+    },
+  });
 
   return getContractByIdFromDb(contractId);
 }
@@ -565,6 +655,22 @@ export async function upsertWarSubmissionForContract(params: {
   summary: string;
   submissionId?: string | null;
 }): Promise<{ entry: MockContractSubmission; submissionId: string }> {
+  const contractProject = await prisma.project.findUnique({
+    where: { id: params.contractId },
+    select: { name: true, description: true },
+  });
+
+  if (!contractProject) {
+    throw new Error("SUBMISSION_LOCKED:Contract not found.");
+  }
+
+  const contractMetadata = parseMetadata(contractProject);
+  if (contractMetadata.category === "Legacy Contracts") {
+    throw new Error(
+      "SUBMISSION_LOCKED:This contract is in Legacy (retired) mode and no longer accepts updates."
+    );
+  }
+
   await ensureUserRecord(params.userId, params.userId, null);
 
   const currentPeriod = getCurrentSubmissionPeriod();

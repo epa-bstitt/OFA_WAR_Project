@@ -13,7 +13,24 @@ interface SubmissionDetailPageProps {
   params: { id: string };
 }
 
-export async function generateMetadata({ params }: SubmissionDetailPageProps): Promise<Metadata> {
+type SubmissionStatus = "SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED";
+
+function normalizeSubmissionStatus(status: string): SubmissionStatus {
+  const validStatuses: SubmissionStatus[] = [
+    "SUBMITTED",
+    "IN_REVIEW",
+    "INFO_NEEDED",
+    "APPROVED",
+    "REJECTED",
+    "PUBLISHED",
+  ];
+
+  return validStatuses.includes(status as SubmissionStatus)
+    ? (status as SubmissionStatus)
+    : "SUBMITTED";
+}
+
+export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Submission Details",
     description: "View WAR submission details",
@@ -95,7 +112,9 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
                   {submission.reviews.map((review) => (
                     <div key={review.id} className="bg-slate-50 p-3 rounded-md">
                       <div className="flex items-center gap-2 mb-1">
-                        <StatusBadge status={review.status as any} />
+                        <StatusBadge
+                          status={normalizeSubmissionStatus(review.status)}
+                        />
                         <span className="text-xs text-muted-foreground">
                           {format(new Date(review.createdAt), "MMM d, yyyy")}
                         </span>

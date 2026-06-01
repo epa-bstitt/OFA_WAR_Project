@@ -9,7 +9,6 @@ import {
   Users,
   Shield,
   Settings,
-  FileText,
   Database,
   AlertTriangle,
 } from "lucide-react";

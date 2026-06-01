@@ -62,8 +62,6 @@ function getDemoSession(roleKey: string): Session {
 const {
   handlers,
   auth: baseAuth,
-  signIn,
-  signOut,
 } = NextAuth({
   secret: authSecret,
   providers: [
@@ -114,7 +112,7 @@ const {
     })] : []),
   ],
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       // For demo credentials provider, user is returned directly
       if (user) {
         token.sub = user.id;

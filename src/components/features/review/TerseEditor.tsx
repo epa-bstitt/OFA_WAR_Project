@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, RotateCcw, Save } from "lucide-react";
+import { Check, RotateCcw } from "lucide-react";
 
 interface TerseEditorProps {
   initialTerseText: string;
@@ -24,10 +24,8 @@ const COMMENT_TEMPLATES = [
 export function TerseEditor({ initialTerseText, onChange, submissionId }: TerseEditorProps) {
   const [terseText, setTerseText] = useState(initialTerseText);
   const [originalText] = useState(initialTerseText);
-  const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [charCount, setCharCount] = useState(initialTerseText.length);
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
   // Update char count when text changes
   useEffect(() => {
@@ -41,7 +39,6 @@ export function TerseEditor({ initialTerseText, onChange, submissionId }: TerseE
       if (terseText !== originalText) {
         localStorage.setItem(`review-draft-${submissionId}`, terseText);
         setLastSaved(new Date());
-        setIsSaving(false);
       }
     }, 3000);
 
@@ -94,7 +91,6 @@ export function TerseEditor({ initialTerseText, onChange, submissionId }: TerseE
           value={terseText}
           onChange={(e) => {
             setTerseText(e.target.value);
-            setIsSaving(true);
           }}
           className="flex-1 min-h-[200px] resize-none font-mono text-sm leading-relaxed"
           placeholder="Enter terse version..."
