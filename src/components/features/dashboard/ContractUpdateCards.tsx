@@ -62,8 +62,8 @@ interface DraftLineItem {
   category: LineItemCategory;
   owner: string;
   dueDate: string;
-  carryForward: boolean;
   actionRequired: boolean;
+  carryForward: boolean;
 }
 
 interface DraftState {
@@ -76,19 +76,185 @@ interface DraftState {
   submittedAt: string | null;
   reviewSubmissionId: string | null;
   historyEntryId: string | null;
-  reopenedAfterDeadline: boolean;
-  deadlineLocked: boolean;
+  reopenedAfterDeadline?: boolean;
+  deadlineLocked?: boolean;
 }
 
-type ActiveContractState = Record<string, ActiveContractDetails>;
+type ActiveContractState = Record<string, ActiveContractDetails & { categorySwitch?: string }>;
 
-interface FieldHintLabelProps {
+const categoryOptions: Array<{ value: LineItemCategory; label: string; description: string }> = [
+  { value: "GENERAL", label: "General", description: "Overall contract progress and notable changes." },
+  { value: "FUNDING", label: "Funding", description: "Budget execution, shortfalls, and allocation updates." },
+  { value: "ACTION", label: "Action", description: "Tasks and follow-up actions requiring completion." },
+  { value: "RISK", label: "Risk", description: "Items that may impact schedule, scope, or performance." },
+  { value: "DECISION", label: "Decision", description: "Leadership decisions needed to move work forward." },
+  { value: "MEETING", label: "Meeting", description: "Coordination outcomes and upcoming meeting priorities." },
+];
+
+const PALT_MATRIX: Record<string, Record<string, string[]>> = {
+  "Simplified Acquisitions Procedures": {
+    "Micropurchase": ["5", "5", "5", "5", "N/A", "N/A", "5"],
+    "Above Micro & Under SAT": ["15", "15", "10", "10", "7", "8", "10"],
+    "Above SAT- $6.5M (Commercial Test Procedures)": ["45", "45", "30", "20", "15", "15", "30"],
+  },
+  "FSS/GSA Order Including BPA Orders (no SOW)": {
+    "Micropurchase": ["5", "5", "5", "5", "5", "5", "10"],
+    "Above Micro & Under SAT": ["15", "15", "10", "10", "10", "5", "10"],
+    "Over SAT": ["30", "30", "15", "15", "15", "15", "30"],
+  },
+  "FSS/GSA Order Including BPA Orders (w/SOW)": {
+    "Micropurchase": ["5", "5", "5", "5", "5", "5", "10"],
+    "Above Micro & Under SAT": ["30", "30", "15", "10", "10", "10", "15"],
+    "Over SAT": ["45", "45", "15", "15", "15", "15", "30"],
+  },
+  "Sealed Bids Including 2 Step": {
+    "Up to $1M": ["30", "30", "15", "30", "15", "15", "15"],
+    "Above $1M up to $10M": ["45", "45", "30", "30", "30", "30", "30"],
+    "Over $10M": ["60", "60", "30", "45", "45", "30", "30"],
+  },
+  "Competitive Proposals (RFP)": {
+    "Up to $1M": ["45", "45", "30", "30", "15", "15", "30"],
+    "Above $1M up to $10M": ["60", "60", "30", "30", "30", "30", "30"],
+    "Over $10M": ["90", "60", "45", "30", "45", "30", "60"],
+  },
+};
+
+const PALT_PROCUREMENT_TYPES = Object.keys(PALT_MATRIX);
+
+const PALT_DOLLAR_VALUES_BY_PROCUREMENT: Record<string, string[]> = Object.fromEntries(
+  Object.entries(PALT_MATRIX).map(([procurementType, values]) => [
+    procurementType,
+    Object.keys(values),
+  ])
+);
+
+const PALT_MILESTONE_LABELS = [
+  "OITO Engagement Ends",
+  "Acquisition Planning Complete",
+  "Procurement Package Complete",
+  "Solicitation Issued",
+  "Proposals Received",
+  "Tech Evaluations Complete",
+  "Final Proposals Received",
+  "Award Complete",
+];
+
+function getPaltMilestoneDays(contract: ActiveContractDetails): string[] {
+  const procurementType = contract.paltProcurementType || "";
+  const dollarValue = contract.paltDollarValue || "";
+  const rowValues = PALT_MATRIX[procurementType]?.[dollarValue];
+
+  return rowValues || ["15", "15", "10", "10", "7", "8", "10"];
+}
+
+function getPaltDollarValues(procurementType?: string) {
+  return PALT_DOLLAR_VALUES_BY_PROCUREMENT[procurementType || ""] || [];
+}
+
+function getPaltMilestoneSequence(contract: ActiveContractDetails) {
+  const milestoneDays = getPaltMilestoneDays(contract);
+  const procurementType = contract.paltProcurementType || "";
+  const dollarValue = contract.paltDollarValue || "";
+
+  if (procurementType === "Simplified Acquisitions Procedures" && dollarValue === "Micropurchase") {
+    return [
+      { milestone: "OITO Engagement Ends", days: milestoneDays[0] || "" },
+      { milestone: "Acquisition Planning Complete", days: milestoneDays[1] || "" },
+      { milestone: "Procurement Package Complete", days: milestoneDays[2] || "" },
+      { milestone: "Solicitation Issued", days: milestoneDays[3] || "" },
+      { milestone: "Proposals Received", days: milestoneDays[6] || "" },
+      { milestone: "Award Complete", days: "End Date" },
+    ];
+  }
+
+  return PALT_MILESTONE_LABELS.map((milestone, index) => ({
+    milestone,
+    days: index === PALT_MILESTONE_LABELS.length - 1 ? "End Date" : milestoneDays[index] || "",
+  }));
+}
+
+type PaltMilestoneRow = {
+  id: number;
+  milestone: string;
+  dueDate: string;
+  days: string;
+};
+
+function addDaysToIsoDate(dateValue: string, daysValue: string) {
+  const days = Number.parseInt(daysValue, 10);
+  if (!dateValue || Number.isNaN(days)) {
+    return "";
+  }
+
+  const parsed = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  parsed.setDate(parsed.getDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function applyCalculatedPaltDueDates(rows: PaltMilestoneRow[], startIndex = 1): PaltMilestoneRow[] {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const nextRows = rows.map((row) => ({ ...row }));
+
+  for (let index = Math.max(1, startIndex); index < nextRows.length; index += 1) {
+    const previousDueDate = nextRows[index - 1]?.dueDate || "";
+    const previousDays = nextRows[index - 1]?.days || "";
+    nextRows[index].dueDate = addDaysToIsoDate(previousDueDate, previousDays);
+  }
+
+  return nextRows;
+}
+
+function buildPaltMilestones(contract: ActiveContractDetails) {
+  const milestoneSequence = getPaltMilestoneSequence(contract);
+  const defaults = applyCalculatedPaltDueDates([
+    { id: 0, milestone: "Begin OITO Engagement", dueDate: contract.paltBeginOitoEngagement || "", days: "90" },
+    ...milestoneSequence.map(({ milestone, days }, index) => ({
+      id: index + 1,
+      milestone,
+      dueDate: "",
+      days,
+    })),
+  ]);
+
+  if (!contract.paltMilestones) {
+    return defaults;
+  }
+
+  try {
+    const parsed = JSON.parse(contract.paltMilestones);
+    if (!Array.isArray(parsed)) {
+      return defaults;
+    }
+
+    const normalizedRows: PaltMilestoneRow[] = parsed.map((row, index) => ({
+      id: typeof row?.id === "number" ? row.id : index,
+      milestone: typeof row?.milestone === "string" ? row.milestone : defaults[index]?.milestone || `Milestone ${index + 1}`,
+      dueDate: typeof row?.dueDate === "string" ? row.dueDate : "",
+      days: typeof row?.days === "string" || typeof row?.days === "number" ? String(row.days) : defaults[index]?.days || "",
+    }));
+
+    return normalizedRows;
+  } catch {
+    return defaults;
+  }
+}
+
+function FieldHintLabel({
+  label,
+  hint,
+  dataTour,
+}: {
   label: string;
   hint: string;
   dataTour?: string;
-}
-
-function FieldHintLabel({ label, hint, dataTour }: FieldHintLabelProps) {
+}) {
   return (
     <div className="mb-1 flex items-center gap-1.5" data-tour={dataTour}>
       <p className="text-xs font-medium text-slate-500">{label}</p>
@@ -110,10 +276,63 @@ function FieldHintLabel({ label, hint, dataTour }: FieldHintLabelProps) {
   );
 }
 
-const statusStyles: Record<LineItemStatus, string> = {
-  NORMAL: "bg-slate-100 text-slate-700 border-slate-200",
-  RISK: "bg-amber-100 text-amber-800 border-amber-200",
-  CRITICAL: "bg-rose-100 text-rose-800 border-rose-200",
+function createLineItem(
+  text = "",
+  options: Partial<Pick<DraftLineItem, "status" | "category" | "owner" | "dueDate" | "actionRequired" | "carryForward">> = {}
+): DraftLineItem {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    text,
+    status: options.status ?? "NORMAL",
+    category: options.category ?? "GENERAL",
+    owner: options.owner ?? "",
+    dueDate: options.dueDate ?? "",
+    actionRequired: options.actionRequired ?? false,
+    carryForward: options.carryForward ?? false,
+  };
+}
+
+const RECOMPETES_CATEGORY = "New Awards and Recompetes";
+const LEGACY_CATEGORY = "Legacy Contracts";
+const OUTLOOK_CATEGORY = "Current and Active Contracts/Purchase Order Outlook";
+const PALT_MODE = "PALT";
+
+function isContributorVisibleContract(category: string) {
+  return category !== LEGACY_CATEGORY;
+}
+
+function getInitialCategorySwitch(contract: MockContract) {
+  if (contract.activeContract.categorySwitch) {
+    return contract.activeContract.categorySwitch;
+  }
+
+  if (contract.activeContract.palt) {
+    return PALT_MODE;
+  }
+
+  if (contract.category === RECOMPETES_CATEGORY) {
+    return "RECOMPETES";
+  }
+
+  return "CURRENT";
+}
+
+function getCurrentTableLabel(category: string) {
+  if (category === LEGACY_CATEGORY) {
+    return "Legacy Contracts";
+  }
+
+  if (category === RECOMPETES_CATEGORY) {
+    return "New Awards and Recompetes";
+  }
+
+  return OUTLOOK_CATEGORY;
+}
+
+const statusStyles: Record<LineItemStatus | "NORMAL" | "RISK" | "CRITICAL", string> = {
+  NORMAL: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  RISK: "border-amber-200 bg-amber-50 text-amber-700",
+  CRITICAL: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
 function getDraftSeverity(draft: DraftState): LineItemStatus {
@@ -130,224 +349,6 @@ function getDraftSeverity(draft: DraftState): LineItemStatus {
   }
 
   return "NORMAL";
-}
-
-const categoryOptions: Array<{ value: LineItemCategory; label: string; description: string }> = [
-  { value: "GENERAL", label: "General", description: "General weekly context and summary notes." },
-  { value: "FUNDING", label: "Funding", description: "Funding status, runout dates, and approvals." },
-  { value: "ACTION", label: "Action", description: "Task orders, requests, and operational work." },
-  { value: "RISK", label: "Risk", description: "Issues, blockers, and escalation items." },
-  { value: "DECISION", label: "Decision", description: "Decisions pending or required from stakeholders." },
-  { value: "MEETING", label: "Meeting", description: "Meetings, briefings, and follow-up notes." },
-];
-
-function createLineItem(
-  text: string = "",
-  overrides: Partial<Omit<DraftLineItem, "id" | "text">> = {}
-): DraftLineItem {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    text,
-    status: overrides.status ?? "NORMAL",
-    category: overrides.category ?? "GENERAL",
-    owner: overrides.owner ?? "",
-    dueDate: overrides.dueDate ?? "",
-    carryForward: overrides.carryForward ?? false,
-    actionRequired: overrides.actionRequired ?? false,
-  };
-}
-
-const cardThemes: Record<string, { shell: string; panel: string; badge: string }> = {
-  ebusiness: {
-    shell: "border-sky-300 bg-gradient-to-br from-white via-sky-50 to-cyan-100 shadow-[0_24px_60px_-28px_rgba(14,116,144,0.45)]",
-    panel: "border-sky-200 bg-white/90",
-    badge: "bg-sky-700 text-white hover:bg-sky-700",
-  },
-  "hesc-ii": {
-    shell: "border-emerald-300 bg-gradient-to-br from-white via-emerald-50 to-lime-100 shadow-[0_24px_60px_-28px_rgba(5,150,105,0.4)]",
-    panel: "border-emerald-200 bg-white/90",
-    badge: "bg-emerald-700 text-white hover:bg-emerald-700",
-  },
-  "iti-iii": {
-    shell: "border-amber-300 bg-gradient-to-br from-white via-amber-50 to-orange-100 shadow-[0_24px_60px_-28px_rgba(217,119,6,0.42)]",
-    panel: "border-amber-200 bg-white/90",
-    badge: "bg-amber-700 text-white hover:bg-amber-700",
-  },
-};
-
-const RECOMPETES_CATEGORY = "New Awards and Recompetes";
-const LEGACY_CATEGORY = "Legacy Contracts";
-const PALT_MODE = "PALT";
-
-type PaltMilestoneRow = {
-  id: number;
-  milestone: string;
-  dueDate: string;
-  days: string;
-};
-
-const PALT_PROCUREMENT_TYPES = [
-  "Simplified Acquisitions Procedures",
-  "FSS/GSA Order Including BPA Orders (no SOW)",
-  "FSS/GSA Order Including BPA Orders (w/SOW)",
-  "Sealed Bids Including 2 Step",
-  "Competitive Proposals (RFP)",
-];
-
-const PALT_DOLLAR_VALUES = [
-  "Micropurchase",
-  "Above Micro & Under SAT",
-  "Over SAT",
-  "Above SAT-$6.5M (Commercial Test Procedures)",
-  "Up to $1M",
-  "Above $1M up to $10M",
-  "Over $10M",
-];
-
-const DEFAULT_PALT_DAYS = [30, 30, 15, 15, 15, 15, 30];
-
-const PALT_STANDARDS: Record<string, number[]> = {
-  "Simplified Acquisitions Procedures|Micropurchase": [5, 5, 5, 5, 0, 0, 5],
-  "Simplified Acquisitions Procedures|Above Micro & Under SAT": [15, 15, 10, 10, 7, 8, 10],
-  "Simplified Acquisitions Procedures|Above SAT-$6.5M (Commercial Test Procedures)": [45, 45, 30, 20, 15, 15, 30],
-  "FSS/GSA Order Including BPA Orders (no SOW)|Micropurchase": [5, 5, 5, 5, 5, 5, 10],
-  "FSS/GSA Order Including BPA Orders (no SOW)|Above Micro & Under SAT": [15, 15, 10, 10, 10, 5, 10],
-  "FSS/GSA Order Including BPA Orders (no SOW)|Over SAT": [30, 30, 15, 15, 15, 15, 30],
-  "FSS/GSA Order Including BPA Orders (w/SOW)|Micropurchase": [5, 5, 5, 5, 5, 5, 10],
-  "FSS/GSA Order Including BPA Orders (w/SOW)|Above Micro & Under SAT": [15, 15, 10, 10, 10, 10, 15],
-  "FSS/GSA Order Including BPA Orders (w/SOW)|Over SAT": [45, 45, 15, 15, 15, 15, 30],
-  "Sealed Bids Including 2 Step|Up to $1M": [30, 30, 15, 30, 15, 15, 15],
-  "Sealed Bids Including 2 Step|Above $1M up to $10M": [45, 45, 30, 30, 30, 30, 30],
-  "Sealed Bids Including 2 Step|Over $10M": [60, 60, 30, 45, 45, 30, 30],
-  "Competitive Proposals (RFP)|Up to $1M": [45, 45, 30, 30, 15, 15, 30],
-  "Competitive Proposals (RFP)|Above $1M up to $10M": [60, 60, 30, 30, 30, 30, 30],
-  "Competitive Proposals (RFP)|Over $10M": [90, 60, 45, 30, 45, 30, 60],
-};
-
-function formatDateInput(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
-
-function addDaysToIso(startDate: string, daysToAdd: number) {
-  const parsed = new Date(startDate);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-
-  parsed.setDate(parsed.getDate() + daysToAdd);
-  return formatDateInput(parsed);
-}
-
-function diffDays(fromDate: string, toDate: string) {
-  const from = new Date(fromDate);
-  const to = new Date(toDate);
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
-    return "";
-  }
-
-  return String(Math.max(0, Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24))));
-}
-
-function getPaltStandardDays(procurementType?: string, dollarValue?: string) {
-  const key = `${procurementType || ""}|${dollarValue || ""}`;
-  return PALT_STANDARDS[key] || DEFAULT_PALT_DAYS;
-}
-
-function buildPaltMilestones(details: ActiveContractDetails): PaltMilestoneRow[] {
-  if (details.paltMilestones?.trim()) {
-    try {
-      const parsed = JSON.parse(details.paltMilestones) as PaltMilestoneRow[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    } catch {
-      // Fallback to generated values.
-    }
-  }
-
-  const beginDate = details.paltBeginOitoEngagement || "";
-  const oitoDate = details.paltOitoEngagement || "";
-  const standardDays = getPaltStandardDays(details.paltProcurementType, details.paltDollarValue);
-
-  const rows: PaltMilestoneRow[] = [
-    {
-      id: 0,
-      milestone: "Begin OITO Engagement",
-      dueDate: beginDate,
-      days: "",
-    },
-    {
-      id: 1,
-      milestone: "OITO Engagement",
-      dueDate: oitoDate,
-      days: beginDate && oitoDate ? diffDays(beginDate, oitoDate) : "",
-    },
-  ];
-
-  const milestoneNames = [
-    "Acquisition Planning Complete",
-    "Procurement Package Complete",
-    "Solicitation Issued",
-    "Proposals Received",
-    "Tech Evaluations Complete",
-    "Final Proposals Received",
-    "Award Complete",
-  ];
-
-  let runningDate = oitoDate || beginDate;
-
-  milestoneNames.forEach((name, index) => {
-    const days = standardDays[index] ?? 0;
-    const dueDate = runningDate ? addDaysToIso(runningDate, days) : "";
-    if (dueDate) {
-      runningDate = dueDate;
-    }
-
-    rows.push({
-      id: index + 2,
-      milestone: name,
-      dueDate,
-      days: String(days),
-    });
-  });
-
-  return rows;
-}
-
-function getInitialCategorySwitch(contract: MockContract) {
-  if (contract.activeContract.categorySwitch) {
-    return contract.activeContract.categorySwitch;
-  }
-
-  if (
-    contract.activeContract.paltProcurementType ||
-    contract.activeContract.paltDollarValue ||
-    contract.activeContract.paltMilestones
-  ) {
-    return PALT_MODE;
-  }
-
-  if (contract.category === RECOMPETES_CATEGORY) {
-    return "RECOMPETES";
-  }
-
-  return "CURRENT";
-}
-
-function isContributorVisibleContract(category: string) {
-  return category !== LEGACY_CATEGORY && category !== "Completed";
-}
-
-function getCurrentTableLabel(category: string) {
-  if (category === RECOMPETES_CATEGORY) {
-    return "New Awards and Recompetes";
-  }
-
-  if (category === LEGACY_CATEGORY) {
-    return "Legacy Contracts";
-  }
-
-  return "Current and Active Contracts/Purchase Order Outlook";
 }
 
 const WALKTHROUGH_DISMISSED_KEY = "war-submit-card-walkthrough-dismissed";
@@ -466,6 +467,35 @@ export function ContractUpdateCards({
     : null;
 
   const firstContractId = visibleContracts[0]?.id ?? null;
+  const cardThemes = useMemo<Record<string, { shell: string; panel: string; badge: string }>>(
+    () =>
+      Object.fromEntries(
+        visibleContracts.map((contract) => {
+          if (contract.category === RECOMPETES_CATEGORY) {
+            return [contract.id, {
+              shell: "border-sky-300 bg-sky-50 shadow-[0_24px_60px_-28px_rgba(14,165,233,0.2)]",
+              panel: "border-sky-200 bg-sky-50/90",
+              badge: "bg-sky-700 text-white hover:bg-sky-700",
+            }];
+          }
+
+          if (contract.category === LEGACY_CATEGORY) {
+            return [contract.id, {
+              shell: "border-slate-300 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.18)]",
+              panel: "border-slate-200 bg-white/90",
+              badge: "bg-slate-800 text-white hover:bg-slate-800",
+            }];
+          }
+
+          return [contract.id, {
+            shell: "border-emerald-300 bg-emerald-50 shadow-[0_24px_60px_-28px_rgba(16,185,129,0.18)]",
+            panel: "border-emerald-200 bg-emerald-50/90",
+            badge: "bg-emerald-700 text-white hover:bg-emerald-700",
+          }];
+        })
+      ),
+    [visibleContracts]
+  );
 
   const isWalkthroughOpen = walkthroughVariant !== null;
 
@@ -973,6 +1003,39 @@ export function ContractUpdateCards({
     };
   }, [selectedActiveContractId, selectedActiveContract, userRole, saveActiveContractDetails]);
 
+  useEffect(() => {
+    if (!selectedActiveContractId || !selectedActiveContract) {
+      return;
+    }
+
+    if (selectedActiveContract.categorySwitch !== PALT_MODE) {
+      return;
+    }
+
+    const validProcurementType = PALT_PROCUREMENT_TYPES.includes(selectedActiveContract.paltProcurementType || "")
+      ? (selectedActiveContract.paltProcurementType || "")
+      : PALT_PROCUREMENT_TYPES[0] || "";
+    const validDollarValues = getPaltDollarValues(validProcurementType);
+    const validDollarValue = validDollarValues.includes(selectedActiveContract.paltDollarValue || "")
+      ? (selectedActiveContract.paltDollarValue || "")
+      : validDollarValues[0] || "";
+
+    if (
+      validProcurementType !== (selectedActiveContract.paltProcurementType || "") ||
+      validDollarValue !== (selectedActiveContract.paltDollarValue || "")
+    ) {
+      setActiveContracts((prev) => ({
+        ...prev,
+        [selectedActiveContractId]: {
+          ...prev[selectedActiveContractId],
+          paltProcurementType: validProcurementType,
+          paltDollarValue: validDollarValue,
+          paltMilestones: "",
+        },
+      }));
+    }
+  }, [selectedActiveContractId, selectedActiveContract]);
+
   function updatePaltMilestone(
     contractId: string,
     rowIndex: number,
@@ -994,7 +1057,12 @@ export function ContractUpdateCards({
         : row
     );
 
-    updateActiveContractField(contractId, "paltMilestones", JSON.stringify(nextRows));
+    const recalculatedRows = applyCalculatedPaltDueDates(nextRows, rowIndex + 1);
+
+    updateActiveContractField(contractId, "paltMilestones", JSON.stringify(recalculatedRows));
+    updateActiveContractField(contractId, "paltBeginOitoEngagement", recalculatedRows[0]?.dueDate || "");
+    updateActiveContractField(contractId, "paltOitoEngagement", recalculatedRows[1]?.dueDate || "");
+    updateActiveContractField(contractId, "ultimateCompletionDate", recalculatedRows[recalculatedRows.length - 1]?.dueDate || "");
   }
 
   function renderBasicLineItems(contract: MockContract, draft: DraftState, isFirstCard: boolean) {
@@ -1623,7 +1691,7 @@ export function ContractUpdateCards({
 
       <Dialog open={Boolean(selectedContract)} onOpenChange={(open) => !open && setSelectedContractId(null)}>
         {selectedContract && (
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">{selectedContract.category}</Badge>
@@ -1680,7 +1748,7 @@ export function ContractUpdateCards({
         }}
       >
         {selectedActiveContractId && selectedActiveContract && (
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle>{selectedActiveContract.contractName || "Contract Details"}</DialogTitle>
@@ -1722,7 +1790,9 @@ export function ContractUpdateCards({
                     <Select
                       value={selectedActiveContract.paltProcurementType || undefined}
                       onValueChange={(value) => {
+                        const nextDollarValues = getPaltDollarValues(value);
                         updateActiveContractField(selectedActiveContractId, "paltProcurementType", value);
+                        updateActiveContractField(selectedActiveContractId, "paltDollarValue", nextDollarValues[0] || "");
                         updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
                       }}
                     >
@@ -1752,37 +1822,13 @@ export function ContractUpdateCards({
                         <SelectValue placeholder="Select dollar value" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PALT_DOLLAR_VALUES.map((option) => (
+                        {getPaltDollarValues(selectedActiveContract.paltProcurementType).map((option) => (
                           <SelectItem key={option} value={option}>
                             {option}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-slate-500">Begin OITO Engagement</p>
-                    <Input
-                      type="date"
-                      value={selectedActiveContract.paltBeginOitoEngagement || ""}
-                      onChange={(event) => {
-                        updateActiveContractField(selectedActiveContractId, "paltBeginOitoEngagement", event.target.value);
-                        updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
-                      }}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-slate-500">OITO Engagement</p>
-                    <Input
-                      type="date"
-                      value={selectedActiveContract.paltOitoEngagement || ""}
-                      onChange={(event) => {
-                        updateActiveContractField(selectedActiveContractId, "paltOitoEngagement", event.target.value);
-                        updateActiveContractField(selectedActiveContractId, "paltMilestones", "");
-                      }}
-                    />
                   </div>
 
                   <div className="md:col-span-2 overflow-hidden rounded-lg border border-slate-200">
@@ -1810,13 +1856,18 @@ export function ContractUpdateCards({
                               />
                             </td>
                             <td className="px-2 py-2">
-                              <Input
-                                type="number"
-                                value={row.days}
-                                onChange={(event) =>
-                                  updatePaltMilestone(selectedActiveContractId, index, "days", event.target.value)
-                                }
-                              />
+                              {row.milestone === "Award Complete" ? (
+                                <div className="px-3 py-2 text-sm text-slate-500">End Date</div>
+                              ) : (
+                                <Input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={row.days}
+                                  onChange={(event) =>
+                                    updatePaltMilestone(selectedActiveContractId, index, "days", event.target.value)
+                                  }
+                                />
+                              )}
                             </td>
                           </tr>
                         ))}
