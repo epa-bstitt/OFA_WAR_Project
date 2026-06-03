@@ -70,7 +70,9 @@ export function ProjectManager({ initialProjects, users }: ProjectManagerProps) 
   // Form states
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
-  const [newProjectStatus, setNewProjectStatus] = useState<Project["status"]>("ACTIVE");
+  const [newProjectStatus, setNewProjectStatus] = useState<
+    "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED"
+  >("ACTIVE");
   const [newComponentName, setNewComponentName] = useState("");
   const [newComponentDescription, setNewComponentDescription] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -253,7 +255,9 @@ export function ProjectManager({ initialProjects, users }: ProjectManagerProps) 
                     <Label htmlFor="status">Status</Label>
                     <Select
                       value={newProjectStatus}
-                      onValueChange={(v) => setNewProjectStatus(v as Project["status"])}
+                      onValueChange={(v) =>
+                        setNewProjectStatus(v as "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED")
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />

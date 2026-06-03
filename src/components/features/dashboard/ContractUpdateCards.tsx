@@ -1924,7 +1924,13 @@ export function ContractUpdateCards({
                               <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
                               <Input
                                 value={value || ""}
-                                onChange={event => updateActiveContractField(selectedActiveContractId, key, event.target.value)}
+                                onChange={event =>
+                                  updateActiveContractField(
+                                    selectedActiveContractId,
+                                    key as keyof ActiveContractDetails,
+                                    event.target.value
+                                  )
+                                }
                                 disabled={isLocked}
                                 className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
                               />
@@ -1984,7 +1990,13 @@ export function ContractUpdateCards({
                               <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
                               <Input
                                 value={value || ""}
-                                onChange={event => updateActiveContractField(selectedActiveContractId, key, event.target.value)}
+                                onChange={event =>
+                                  updateActiveContractField(
+                                    selectedActiveContractId,
+                                    key as keyof ActiveContractDetails,
+                                    event.target.value
+                                  )
+                                }
                                 disabled={isLocked}
                                 className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
                               />
@@ -2004,7 +2016,9 @@ export function ContractUpdateCards({
               )}
               <Button
                 type="button"
-                onClick={saveActiveContractDetails}
+                onClick={() => {
+                  void saveActiveContractDetails();
+                }}
                 disabled={isSavingActiveContract}
               >
                 Save

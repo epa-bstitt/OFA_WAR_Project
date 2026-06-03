@@ -155,8 +155,9 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     .map((submission) => ({
       id: submission.id,
       name: submission.contractName,
-      category:
-        submission.contractCategory === "New Awards and Recompetes" ? "recompetes" : "outlook",
+      category: (
+        submission.contractCategory === "New Awards and Recompetes" ? "recompetes" : "outlook"
+      ) as "recompetes" | "outlook",
       periodId: currentPeriod.id,
     }));
 
@@ -169,11 +170,6 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
             ? "Review weekly activity report submissions. Use the toolbar below to export or view logs."
             : "Review and manage weekly activity report submissions"
         }
-        section="Program Oversight"
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "WAR Review", href: "/approve" },
-        ]}
       >
         {isProgramOverseer ? (
           <div className="flex flex-row gap-3 items-center">

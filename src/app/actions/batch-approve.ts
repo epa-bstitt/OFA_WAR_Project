@@ -70,7 +70,7 @@ export async function batchApprove(
     });
 
     // Transactional update
-    const result = await prisma.$transaction(async (tx: typeof prisma) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Update all submissions to APPROVED
       await tx.submission.updateMany({
         where: {
@@ -90,7 +90,7 @@ export async function batchApprove(
             submissionId: id,
             reviewerId: session.user.id,
             status: "APPROVED",
-            notes: notes || "Batch approved by Program Overseer",
+            comment: notes || "Batch approved by Program Overseer",
           },
         });
       }
@@ -197,7 +197,7 @@ export async function batchReject(
     });
 
     // Transactional update
-    const result = await prisma.$transaction(async (tx: typeof prisma) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Update all submissions back to SUBMITTED
       await tx.submission.updateMany({
         where: {
@@ -217,7 +217,7 @@ export async function batchReject(
             submissionId: id,
             reviewerId: session.user.id,
             status: "REJECTED",
-            notes: reason,
+            comment: reason,
           },
         });
       }
@@ -301,7 +301,7 @@ export async function undoBatchAction(
     }
 
     // Undo the action
-    await prisma.$transaction(async (tx: typeof prisma) => {
+    await prisma.$transaction(async (tx) => {
       for (const submissionId of action.submissionIds) {
         const previousStatus = action.previousStatuses[submissionId];
         

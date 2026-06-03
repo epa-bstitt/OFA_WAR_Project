@@ -143,6 +143,36 @@ export default async function AuditPage({ searchParams }: AuditPageProps) {
     return response;
   }
 
+  const normalizedLogs = logsResult.logs.map((log) => {
+    const createdAt = log.createdAt instanceof Date
+      ? log.createdAt.toISOString()
+      : new Date(log.createdAt).toISOString();
+
+    if ("metadata" in log) {
+      return {
+        ...log,
+        createdAt,
+      };
+    }
+
+    return {
+      id: log.id,
+      action: log.action,
+      userId: log.userId,
+      resourceType: log.resourceType,
+      resourceId: log.resourceId,
+      metadata: log.details,
+      ipAddress: log.ipAddress,
+      userAgent: log.userAgent,
+      createdAt,
+      user: {
+        id: log.userId,
+        name: log.userName,
+        email: `${log.userId}@mock.local`,
+      },
+    };
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -154,10 +184,7 @@ export default async function AuditPage({ searchParams }: AuditPageProps) {
       <MockModeToggle />
 
       <AuditLogViewer
-        logs={logsResult.logs.map((log) => ({
-          ...log,
-          createdAt: log.createdAt.toISOString(),
-        }))}
+        logs={normalizedLogs}
         total={logsResult.total}
         page={page}
         pageSize={pageSize}

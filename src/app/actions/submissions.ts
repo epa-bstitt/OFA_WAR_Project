@@ -28,7 +28,7 @@ export interface Submission {
   rawText: string;
   terseText?: string | null;
   terseVersion?: string | null;
-  status: "SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED";
+  status: string;
   isAiGenerated: boolean;
   aiConfidence?: number | null;
   createdAt: Date;

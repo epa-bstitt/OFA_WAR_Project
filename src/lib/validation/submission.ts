@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isFuture, isWeekValid, getCurrentWeek, getISOWeekYear } from "@/lib/date-utils";
+import { isFuture, isWeekValid, getCurrentWeek, getISOWeekYear, getISOWeek } from "@/lib/date-utils";
 
 /**
  * Zod schema for WAR submission validation
@@ -15,7 +15,7 @@ export const submissionSchema = z.object({
     )
     .refine(
       (date) => {
-        const week = getCurrentWeek();
+        const week = getISOWeek(date);
         const year = getISOWeekYear(date);
         return isWeekValid(week, year);
       },

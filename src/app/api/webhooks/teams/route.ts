@@ -23,9 +23,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Get the bot adapter
     const adapter = getBotAdapter();
+    const webhookAdapter = adapter as unknown as {
+      processActivity: (
+        activity: unknown,
+        logic: (context: { activity: { type?: string; text?: string; from?: { id?: string }; conversation?: { id?: string } } }) => Promise<void>
+      ) => Promise<void>;
+    };
 
     // Process the activity
-    await adapter.processActivity(body, async (context) => {
+    await webhookAdapter.processActivity(body, async (context) => {
       const activity = context.activity;
 
       // Log activity for debugging
@@ -41,17 +47,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Handle different activity types
       switch (activity.type) {
         case ActivityTypes.Message:
-          await handleMessage(context);
+          await handleMessage(context as Parameters<typeof handleMessage>[0]);
           break;
 
         case ActivityTypes.ConversationUpdate:
           // Handle conversation updates (user added/removed)
-          await handleConversationUpdate(context);
+          await handleConversationUpdate(context as Parameters<typeof handleConversationUpdate>[0]);
           break;
 
         case ActivityTypes.Invoke:
           // Handle adaptive card invokes
-          await handleMessage(context);
+          await handleMessage(context as Parameters<typeof handleMessage>[0]);
           break;
 
         default:

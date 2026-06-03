@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth, hasMinimumRole } from "@/lib/auth";
 
 /**
  * POST /api/admin/settings/test-connections
@@ -14,6 +15,15 @@ export async function POST(request: Request) {
   };
 
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasMinimumRole(session.user.role, "ADMINISTRATOR")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Get settings from request body
     const body = await request.json();
     

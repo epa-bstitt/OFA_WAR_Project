@@ -19,6 +19,33 @@ export interface PromptTemplate {
   updatedAt: Date;
 }
 
+type DbPromptTemplate = {
+  id: string;
+  name: string;
+  content: string;
+  version: number;
+  isActive: boolean;
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function toPromptTemplate(row: DbPromptTemplate): PromptTemplate {
+  return {
+    id: row.id,
+    name: row.name,
+    description: null,
+    promptText: row.content,
+    systemMsg: null,
+    version: String(row.version),
+    isActive: row.isActive,
+    isDeleted: false,
+    createdBy: row.createdBy ?? "system",
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export interface CreatePromptInput {
   name: string;
   description?: string;
@@ -47,11 +74,10 @@ export async function getPrompts(): Promise<
     }
 
     const prompts = await prisma.promptTemplate.findMany({
-      where: { isDeleted: false },
       orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
     });
 
-    return { success: true, prompts };
+    return { success: true, prompts: prompts.map((prompt) => toPromptTemplate(prompt)) };
   } catch (error) {
     console.error("Error fetching prompts:", error);
     return { success: false, error: "Failed to fetch prompts" };
@@ -73,15 +99,15 @@ export async function getPromptById(
       return { success: false, error: "Not authenticated" };
     }
 
-    const prompt = await prisma.promptTemplate.findFirst({
-      where: { id, isDeleted: false },
+    const prompt = await prisma.promptTemplate.findUnique({
+      where: { id },
     });
 
     if (!prompt) {
       return { success: false, error: "Prompt not found" };
     }
 
-    return { success: true, prompt };
+    return { success: true, prompt: toPromptTemplate(prompt) };
   } catch (error) {
     console.error("Error fetching prompt:", error);
     return { success: false, error: "Failed to fetch prompt" };
@@ -102,10 +128,10 @@ export async function getActivePrompt(): Promise<
     }
 
     const prompt = await prisma.promptTemplate.findFirst({
-      where: { isActive: true, isDeleted: false },
+      where: { isActive: true },
     });
 
-    return { success: true, prompt };
+    return { success: true, prompt: prompt ? toPromptTemplate(prompt) : null };
   } catch (error) {
     console.error("Error fetching active prompt:", error);
     return { success: false, error: "Failed to fetch active prompt" };
@@ -126,7 +152,7 @@ export async function createPrompt(
 
     // Check for duplicate name
     const existing = await prisma.promptTemplate.findFirst({
-      where: { name: data.name, isDeleted: false },
+      where: { name: data.name },
     });
 
     if (existing) {
@@ -136,10 +162,8 @@ export async function createPrompt(
     const prompt = await prisma.promptTemplate.create({
       data: {
         name: data.name,
-        description: data.description,
-        promptText: data.promptText,
-        systemMsg: data.systemMsg,
-        version: "1.0.0",
+        content: data.promptText,
+        version: 1,
         isActive: false,
         createdBy: session.user.id,
       },
@@ -152,13 +176,13 @@ export async function createPrompt(
         userId: session.user.id,
         resourceType: "prompt",
         resourceId: prompt.id,
-        metadata: JSON.stringify({ name: data.name, version: "1.0.0" }),
+        metadata: JSON.stringify({ name: data.name, version: 1 }),
       },
     });
 
     revalidatePath("/prompts");
 
-    return { success: true, prompt };
+    return { success: true, prompt: toPromptTemplate(prompt) };
   } catch (error) {
     console.error("Error creating prompt:", error);
     return { success: false, error: "Failed to create prompt" };
@@ -179,23 +203,19 @@ export async function updatePrompt(
     }
 
     const existingPrompt = await prisma.promptTemplate.findFirst({
-      where: { id, isDeleted: false },
+      where: { id },
     });
 
     if (!existingPrompt) {
       return { success: false, error: "Prompt not found" };
     }
 
-    // Increment version (simple patch increment)
-    const currentVersion = existingPrompt.version;
-    const parts = currentVersion.split(".").map(Number);
-    parts[2] = (parts[2] || 0) + 1;
-    const newVersion = parts.join(".");
+    const newVersion = existingPrompt.version + 1;
 
     // If name is changing, check for duplicates
     if (data.name && data.name !== existingPrompt.name) {
       const duplicate = await prisma.promptTemplate.findFirst({
-        where: { name: data.name, isDeleted: false, id: { not: id } },
+        where: { name: data.name, id: { not: id } },
       });
       if (duplicate) {
         return { success: false, error: "A prompt with this name already exists" };
@@ -206,9 +226,7 @@ export async function updatePrompt(
       where: { id },
       data: {
         name: data.name ?? existingPrompt.name,
-        description: data.description ?? existingPrompt.description,
-        promptText: data.promptText ?? existingPrompt.promptText,
-        systemMsg: data.systemMsg ?? existingPrompt.systemMsg,
+        content: data.promptText ?? existingPrompt.content,
         version: newVersion,
       },
     });
@@ -227,7 +245,7 @@ export async function updatePrompt(
     revalidatePath("/prompts");
     revalidatePath(`/prompts/${id}/edit`);
 
-    return { success: true, prompt };
+    return { success: true, prompt: toPromptTemplate(prompt) };
   } catch (error) {
     console.error("Error updating prompt:", error);
     return { success: false, error: "Failed to update prompt" };
@@ -247,7 +265,7 @@ export async function deletePrompt(
     }
 
     const existingPrompt = await prisma.promptTemplate.findFirst({
-      where: { id, isDeleted: false },
+      where: { id },
     });
 
     if (!existingPrompt) {
@@ -259,10 +277,7 @@ export async function deletePrompt(
       return { success: false, error: "Cannot delete the active prompt. Set another prompt as active first." };
     }
 
-    await prisma.promptTemplate.update({
-      where: { id },
-      data: { isDeleted: true, isActive: false },
-    });
+    await prisma.promptTemplate.delete({ where: { id } });
 
     // Log audit event
     await prisma.auditLog.create({
@@ -297,7 +312,7 @@ export async function setActivePrompt(
     }
 
     const prompt = await prisma.promptTemplate.findFirst({
-      where: { id, isDeleted: false },
+      where: { id },
     });
 
     if (!prompt) {

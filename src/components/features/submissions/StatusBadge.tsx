@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 type SubmissionStatus = "SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED";
 
 interface StatusBadgeProps {
-  status: SubmissionStatus;
+  status: string;
   className?: string;
 }
 
@@ -38,7 +38,8 @@ const statusConfig: Record<SubmissionStatus, { label: string; color: string }> =
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusConfig[status] || statusConfig.SUBMITTED;
+  const normalizedStatus = (status in statusConfig ? status : "SUBMITTED") as SubmissionStatus;
+  const config = statusConfig[normalizedStatus];
 
   return (
     <Badge className={cn(config.color, "font-medium", className)}>

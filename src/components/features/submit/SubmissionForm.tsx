@@ -75,7 +75,7 @@ export function SubmissionForm() {
   const defaultPeriodDate = getWeekDate(currentWeek);
 
   const form = useForm<SubmissionWithTerseInput>({
-    resolver: zodResolver(submissionWithTerseSchema),
+    resolver: zodResolver(submissionWithTerseSchema) as never,
     defaultValues: {
       weekOf: defaultPeriodDate,
       rawText: "",

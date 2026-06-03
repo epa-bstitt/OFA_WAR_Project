@@ -10,6 +10,23 @@ interface RecentSubmissionsProps {
   submissions: SubmissionWithReviews[];
 }
 
+type SubmissionStatus = "SUBMITTED" | "IN_REVIEW" | "INFO_NEEDED" | "APPROVED" | "REJECTED" | "PUBLISHED";
+
+function normalizeSubmissionStatus(status: string): SubmissionStatus {
+  const validStatuses: SubmissionStatus[] = [
+    "SUBMITTED",
+    "IN_REVIEW",
+    "INFO_NEEDED",
+    "APPROVED",
+    "REJECTED",
+    "PUBLISHED",
+  ];
+
+  return validStatuses.includes(status as SubmissionStatus)
+    ? (status as SubmissionStatus)
+    : "SUBMITTED";
+}
+
 export function RecentSubmissions({ submissions }: RecentSubmissionsProps) {
   const recentSubmissions = submissions.slice(0, 5);
 
@@ -39,7 +56,7 @@ export function RecentSubmissions({ submissions }: RecentSubmissionsProps) {
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <StatusBadge status={submission.status} />
+                    <StatusBadge status={normalizeSubmissionStatus(submission.status)} />
                     <span className="text-sm font-medium">
                       Week of {format(new Date(submission.weekOf), "MMM d, yyyy")}
                     </span>

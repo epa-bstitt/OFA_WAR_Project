@@ -12,7 +12,7 @@ export interface Project {
   id: string;
   name: string;
   description: string | null;
-  status: "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  status: string;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;

@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { createPage, formatWARContent, isGraphConfigured } from "@/lib/graph/onenote";
 import { withRetry, graphRetryOptions } from "@/lib/graph/retry";
+import { getISOWeek, getISOWeekYear, getWeekRange } from "@/lib/date-utils";
 
 const ROLE_HIERARCHY: Record<string, number> = {
   ADMINISTRATOR: 4,
@@ -74,11 +75,7 @@ export async function publishToOneNote(
           },
         },
       },
-      orderBy: [
-        { year: "asc" },
-        { weekNumber: "asc" },
-        { user: { name: "asc" } },
-      ],
+      orderBy: [{ weekOf: "asc" }, { user: { name: "asc" } }],
     });
 
     if (submissions.length === 0) {
@@ -94,11 +91,13 @@ export async function publishToOneNote(
     }
     
     const groupedByWeek: Record<string, WeekGroup> = submissions.reduce((acc: Record<string, WeekGroup>, sub: typeof submissions[0]) => {
-      const key = `${sub.year}-W${sub.weekNumber}`;
+      const year = getISOWeekYear(sub.weekOf);
+      const weekNumber = getISOWeek(sub.weekOf);
+      const key = `${year}-W${weekNumber}`;
       if (!acc[key]) {
         acc[key] = {
-          year: sub.year,
-          weekNumber: sub.weekNumber,
+          year,
+          weekNumber,
           weekOf: sub.weekOf,
           submissions: [],
         };
@@ -120,8 +119,8 @@ export async function publishToOneNote(
         weekData.submissions.map((sub) => ({
           user: { name: sub.user.name, email: sub.user.email },
           terseText: sub.terseText,
-          year: sub.year,
-          weekNumber: sub.weekNumber,
+          year: getISOWeekYear(sub.weekOf),
+          weekNumber: getISOWeek(sub.weekOf),
           createdAt: sub.createdAt,
         })),
         weekStart,
@@ -147,7 +146,7 @@ export async function publishToOneNote(
             where: { id: submission.id },
             data: {
               status: "PUBLISHED",
-              oneNoteUrl: oneNoteUrl || null,
+              oneNotePageId: oneNoteUrl || oneNotePage.id || null,
               publishedAt: new Date(),
               updatedAt: new Date(),
             },
@@ -257,21 +256,22 @@ export async function getApprovedSubmissions(
       deletedAt: null,
     };
 
-    if (filters?.year) {
-      where.year = filters.year;
+    if (filters?.year && filters?.week) {
+      const weekRange = getWeekRange(filters.week, filters.year);
+      where.weekOf = {
+        gte: weekRange.start,
+        lte: weekRange.end,
+      };
+    } else if (filters?.year) {
+      where.weekOf = {
+        gte: new Date(filters.year, 0, 1),
+        lte: new Date(filters.year, 11, 31, 23, 59, 59, 999),
+      };
     }
 
-    if (filters?.week) {
-      where.weekNumber = filters.week;
-    }
-
-    const submissions = await prisma.submission.findMany({
+    const rawSubmissions = await prisma.submission.findMany({
       where,
-      orderBy: [
-        { year: "desc" },
-        { weekNumber: "desc" },
-        { user: { name: "asc" } },
-      ],
+      orderBy: [{ weekOf: "desc" }, { user: { name: "asc" } }],
       include: {
         user: {
           select: {
@@ -282,6 +282,33 @@ export async function getApprovedSubmissions(
         },
       },
     });
+
+    const submissions = rawSubmissions
+      .map((sub) => ({
+        id: sub.id,
+        terseText: sub.terseText,
+        year: getISOWeekYear(sub.weekOf),
+        weekNumber: getISOWeek(sub.weekOf),
+        weekOf: sub.weekOf,
+        status: sub.status,
+        user: {
+          id: sub.user.id,
+          name: sub.user.name,
+          email: sub.user.email,
+        },
+        aiConfidence: sub.aiConfidence,
+        oneNoteUrl: sub.oneNotePageId?.startsWith("http") ? sub.oneNotePageId : null,
+        publishedAt: sub.publishedAt,
+      }))
+      .filter((sub) => {
+        if (!filters?.week) {
+          return true;
+        }
+        if (filters?.year) {
+          return true;
+        }
+        return sub.weekNumber === filters.week;
+      });
 
     return { success: true, submissions };
   } catch (error) {

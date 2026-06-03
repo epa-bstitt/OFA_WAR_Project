@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
 import type { SubmissionWithReviews } from "@/app/actions/approve";
+import { getISOWeek, getISOWeekYear } from "@/lib/date-utils";
 
 interface BatchActionBarProps {
   submissions: SubmissionWithReviews[];
@@ -71,6 +72,15 @@ export function BatchActionBar({
   const selectedCount = selectedIds.size;
   const allSelected = selectedCount === submissions.length && submissions.length > 0;
   const selectedArray = Array.from(selectedIds);
+
+  const weekLabel = (submission?: SubmissionWithReviews) => {
+    if (!submission) {
+      return "N/A";
+    }
+    return `${getISOWeekYear(submission.weekOf)}-W${getISOWeek(submission.weekOf)
+      .toString()
+      .padStart(2, "0")}`;
+  };
 
   const handleApproveClick = () => {
     if (selectedCount > 20) {
@@ -238,7 +248,7 @@ export function BatchActionBar({
               return (
                 <div key={id} className="text-sm flex items-center gap-2">
                   <CheckCircle className="h-3 w-3 text-green-500" />
-                  {sub?.user.name || sub?.user.email} - Week {sub?.year}-W{sub?.weekNumber}
+                  {sub?.user.name || sub?.user.email} - Week {weekLabel(sub)}
                 </div>
               );
             })}
@@ -282,7 +292,7 @@ export function BatchActionBar({
               return (
                 <div key={id} className="text-sm flex items-center gap-2">
                   <XCircle className="h-3 w-3 text-red-500" />
-                  {sub?.user.name || sub?.user.email} - Week {sub?.year}-W{sub?.weekNumber}
+                  {sub?.user.name || sub?.user.email} - Week {weekLabel(sub)}
                 </div>
               );
             })}

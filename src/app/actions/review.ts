@@ -53,16 +53,9 @@ export interface User {
 export type SubmissionWithUser = Submission & {
   user: {
     id: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string | null;
     email: string | null;
-    azureAdId: string;
-    role: string;
-    isActive: boolean;
-    teamsNotificationsEnabled: boolean;
-    teamsConversationId: string | null;
-    teamsConversationReference: string | null;
+    role?: string;
   };
   reviews: Review[];
 };
@@ -532,34 +525,52 @@ export async function createReview(
       return { success: false, error: "Legacy contracts are retired and cannot be reviewed or approved." };
     }
 
+    const nextSubmissionStatus: Status =
+      status === "APPROVED" ? "APPROVED" : "SUBMITTED";
+    const workflowStage = status === "CHANGES_REQUESTED" ? "CHANGES_REQUESTED" : status;
+
+    await prisma.review.create({
+      data: {
+        submissionId,
+        reviewerId: session.user.id,
+        status,
+        comment,
+      },
+    });
+
     // Update submission status
     await prisma.submission.update({
       where: { id: submissionId },
-      data: { status },
+      data: {
+        status: nextSubmissionStatus,
+        updatedAt: new Date(),
+      },
     });
 
     // Update workflow state
     await prisma.workflowState.upsert({
       where: { submissionId },
-      update: { currentStage: status },
+      update: { currentStage: workflowStage },
       create: {
         submissionId,
-        currentStage: status,
+        currentStage: workflowStage,
         updatedAt: new Date(),
       },
     });
 
     // Log workflow event
     await logWorkflowEvent(
-      status === "APPROVED"
-        ? "SUBMISSION_APPROVED"
-        : status === "REJECTED"
-        ? "SUBMISSION_REJECTED"
-        : "SUBMISSION_PUBLISHED", // Adjusted to use a valid action type
+      status === "APPROVED" ? "SUBMISSION_APPROVED" : "SUBMISSION_REJECTED",
       session.user.id,
       submissionId,
-      { approverName: session.user.name, rejectionReason: comment }
+      {
+        approverName: session.user.name,
+        rejectionReason: comment,
+      }
     );
+
+    revalidatePath("/approve");
+    revalidatePath("/dashboard");
 
     return { success: true };
   } catch (error) {

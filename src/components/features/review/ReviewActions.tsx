@@ -12,13 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import { COMMENT_TEMPLATES } from "./TerseEditor";
 
 interface ReviewActionsProps {
   submissionId: string;
   terseText: string;
   onApprove: (id: string, terseText: string, comment?: string) => Promise<void>;
+  onSkip?: () => void;
+  hasNext?: boolean;
+  hasPrev?: boolean;
 }
 
 export function ReviewActions({
@@ -74,26 +77,7 @@ export function ReviewActions({
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSkip}
-            disabled={!hasNext}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSkip}
-            disabled={!hasNext}
-          >
-            Skip
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+        <div />
 
         <div className="flex items-center gap-2">
           <Button

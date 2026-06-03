@@ -30,48 +30,6 @@ const ROLE_HIERARCHY: Record<string, number> = {
   CONTRIBUTOR: 1,
 };
 
-async function ensureCoreDemoUsers() {
-  const now = new Date();
-  const demoUsers = [
-    {
-      id: "demo-contributor",
-      email: "contributor@demo.epa.gov",
-      name: "Demo Contributor",
-      role: "CONTRIBUTOR",
-      azureAdId: "demo-contributor",
-    },
-    {
-      id: "demo-overseer",
-      email: "overseer@demo.epa.gov",
-      name: "Demo Program Overseer",
-      role: "PROGRAM_OVERSEER",
-      azureAdId: "demo-overseer",
-    },
-  ] as const;
-
-  for (const user of demoUsers) {
-    await prisma.user.upsert({
-      where: { id: user.id },
-      update: {
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        azureAdId: user.azureAdId,
-        isActive: true,
-        updatedAt: now,
-      },
-      create: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        azureAdId: user.azureAdId,
-        isActive: true,
-      },
-    });
-  }
-}
-
 /**
  * Server Action: Get all users with optional filtering
  * Only accessible by ADMINISTRATOR role
@@ -97,8 +55,6 @@ export async function getUsers(
     if (userRole !== "ADMINISTRATOR") {
       return { success: false, error: "Insufficient permissions" };
     }
-
-    await ensureCoreDemoUsers();
 
     const where: Record<string, unknown> = {};
 
@@ -353,8 +309,6 @@ export async function getUserStats(): Promise<
     if (userRole !== "ADMINISTRATOR") {
       return { success: false, error: "Insufficient permissions" };
     }
-
-    await ensureCoreDemoUsers();
 
     const [totalUsers, activeUsers, inactiveUsers, byRole] = await Promise.all([
       prisma.user.count(),

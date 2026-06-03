@@ -21,7 +21,8 @@ export function Sidebar({ className }: SidebarProps) {
   const [contracts, setContracts] = useState<MockContract[]>([]);
   const [isLoadingContracts, setIsLoadingContracts] = useState(false);
 
-  const userRole = (session?.user?.role as Role) || "CONTRIBUTOR";
+  const sessionRole = (session?.user as { role?: Role } | undefined)?.role;
+  const userRole = sessionRole || "CONTRIBUTOR";
   const navItems = NAV_ITEMS[userRole] || [];
   const canSearchContracts = navItems.some((item) => item.href.startsWith("/contracts"));
 

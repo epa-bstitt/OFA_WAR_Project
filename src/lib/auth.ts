@@ -57,6 +57,10 @@ function buildLoginGovProvider() {
   };
 }
 
+const isDemoAuthEnabled =
+  process.env.ENABLE_DEMO_AUTH === "true" ||
+  (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_AUTH !== "false");
+
 const demoUsers: Record<string, { id: string; name: string; email: string; role: string }> = {
   contributor: {
     id: "demo-contributor",
@@ -106,7 +110,7 @@ const {
   secret: authSecret,
   providers: [
     // Demo credentials provider for testing
-    Credentials({
+    ...(isDemoAuthEnabled ? [Credentials({
       id: "demo",
       name: "Demo Login",
       credentials: {
@@ -129,6 +133,7 @@ const {
         return null;
       },
     }),
+    })] : []),
     ...(isLoginGovConfigured
       ? [
           buildLoginGovProvider(),
@@ -190,7 +195,7 @@ export const { GET, POST } = handlers;
 export async function auth(...args: Parameters<typeof baseAuth>) {
   const session = await baseAuth(...args);
 
-  if (args.length === 0) {
+  if (isDemoAuthEnabled && args.length === 0) {
     const cookieStore = cookies();
     const isMockMode = cookieStore.get("admin-mock-mode")?.value === "true";
 
@@ -209,7 +214,7 @@ export async function auth(...args: Parameters<typeof baseAuth>) {
     return null;
   }
 
-  return getDemoSession("contributor");
+  return null;
 }
 
 // Role-based access control helper

@@ -1,15 +1,14 @@
 /** @type {import('next').NextConfig} */
+const enforceStrictTypes =
+	process.env.CI === "true" || process.env.ENFORCE_STRICT_TYPES === "true";
+
 const nextConfig = {
-  eslint: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has ESLint errors. Remove this for production deployment.
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has TypeScript errors. Remove this for production deployment.
-    ignoreBuildErrors: true,
-  },
+	eslint: {
+		ignoreDuringBuilds: false,
+	},
+	typescript: {
+		ignoreBuildErrors: !enforceStrictTypes,
+	},
 };
 
 export default nextConfig;

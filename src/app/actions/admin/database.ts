@@ -124,7 +124,8 @@ export async function getMigrationStatus(): Promise<{
 
     const applied = migrations.filter((m: typeof migrations[0]) => m.finished_at !== null).length;
     const pending = migrations.filter((m: typeof migrations[0]) => m.finished_at === null).length;
-    const lastApplied = migrations.find((m: typeof migrations[0]) => m.finished_at !== null)?.finished_at;
+    const lastApplied =
+      migrations.find((m: typeof migrations[0]) => m.finished_at !== null)?.finished_at ?? undefined;
 
     return {
       success: true,

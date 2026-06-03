@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 function isAuthorized(request: NextRequest): boolean {
   const configuredSecret = process.env.CRON_SECRET;
   if (!configuredSecret) {
-    return true;
+    return process.env.NODE_ENV !== "production";
   }
 
   const authHeader = request.headers.get("authorization") || "";
@@ -41,9 +41,6 @@ export async function GET(request: NextRequest) {
     where: {
       role: "CONTRIBUTOR",
       isActive: true,
-      email: {
-        not: null,
-      },
     },
     select: {
       id: true,

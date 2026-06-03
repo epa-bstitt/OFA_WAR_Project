@@ -45,11 +45,6 @@ export default async function ReviewDashboardPage() {
         <PageHeader
           title="Review Dashboard"
           description="Review and manage weekly activity report submissions"
-          section="Aggregator Workflow"
-          breadcrumbs={[
-            { label: "Dashboard", href: "/dashboard" },
-            { label: "WAR Review", href: "/review" },
-          ]}
         />
 
         <Card>
@@ -94,11 +89,6 @@ export default async function ReviewDashboardPage() {
       <PageHeader
         title="Review Dashboard"
         description="Review and manage weekly activity report submissions"
-        section="Aggregator Workflow"
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "WAR Review", href: "/review" },
-        ]}
         quickLinks={reviewQuickLinks}
       />
 

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
+import { getISOWeek, getISOWeekYear, getWeekRange } from "@/lib/date-utils";
 
 // Manual type definitions to avoid Prisma import issues
 type Submission = {
@@ -10,8 +12,6 @@ type Submission = {
   rawText: string;
   terseText: string | null;
   weekOf: Date;
-  year: number;
-  weekNumber: number;
   status: string;
   userId: string;
   aiConfidence: number | null;
@@ -25,9 +25,7 @@ type Review = {
   submissionId: string;
   reviewerId: string;
   status: string;
-  notes: string | null;
-  aiTerseVersion: string | null;
-  editedTerseVersion: string | null;
+  comment: string | null;
   createdAt: Date;
   updatedAt: Date;
   reviewer: User;
@@ -103,11 +101,11 @@ export async function getInReviewSubmissions(
 
     // Apply filters
     if (filters?.week && filters?.year) {
+      const weekRange = getWeekRange(filters.week, filters.year);
       where.weekOf = {
-        gte: new Date(filters.year, 0, 1),
-        lte: new Date(filters.year, 11, 31),
+        gte: weekRange.start,
+        lte: weekRange.end,
       };
-      where.weekNumber = filters.week;
     }
 
     if (filters?.contributorId) {
@@ -201,24 +199,30 @@ export async function getApprovalStats(
       return { success: false, error: "Insufficient permissions" };
     }
 
-    const currentYear = year || new Date().getFullYear();
-    const currentWeek = week || getCurrentWeek();
+    const now = new Date();
+    const period = week && year
+      ? getWeekRange(week, year)
+      : getCurrentSubmissionPeriod(now);
 
     const [inReviewCount, approvedCount, pendingCount] = await Promise.all([
       prisma.submission.count({
         where: {
           status: "IN_REVIEW",
           deletedAt: null,
-          year: currentYear,
-          weekNumber: currentWeek,
+          weekOf: {
+            gte: period.start,
+            lte: period.end,
+          },
         },
       }),
       prisma.submission.count({
         where: {
           status: "APPROVED",
           deletedAt: null,
-          year: currentYear,
-          weekNumber: currentWeek,
+          weekOf: {
+            gte: period.start,
+            lte: period.end,
+          },
           updatedAt: {
             gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
           },
@@ -226,10 +230,12 @@ export async function getApprovalStats(
       }),
       prisma.submission.count({
         where: {
-          status: { in: ["SUBMITTED", "REJECTED"] },
+          status: { in: ["SUBMITTED", "INFO_NEEDED"] },
           deletedAt: null,
-          year: currentYear,
-          weekNumber: currentWeek,
+          weekOf: {
+            gte: period.start,
+            lte: period.end,
+          },
         },
       }),
     ]);
@@ -340,7 +346,7 @@ export async function approveSubmission(
         submissionId,
         reviewerId: session.user.id,
         status: "APPROVED",
-        notes: notes || "Final approval by Program Overseer",
+        comment: notes || "Final approval by Program Overseer",
       },
     });
 
@@ -430,7 +436,7 @@ export async function rejectSubmission(
         submissionId,
         reviewerId: session.user.id,
         status: "REJECTED",
-        notes: reason,
+        comment: reason,
       },
     });
 
@@ -527,7 +533,7 @@ export async function exportSubmissionsToCSV(
     ];
 
     const rows = submissions.map((sub: typeof submissions[0]) => [
-      `${sub.year}-W${sub.weekNumber.toString().padStart(2, "0")}`,
+      `${getISOWeekYear(sub.weekOf)}-W${getISOWeek(sub.weekOf).toString().padStart(2, "0")}`,
       sub.user.name || sub.user.email,
       sub.user.email,
       `"${(sub.rawText || "").replace(/"/g, '""')}"`,
@@ -566,11 +572,3 @@ export async function exportSubmissionsToCSV(
   }
 }
 
-// Helper function to get current week
-function getCurrentWeek(): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime();
-  const oneWeek = 1000 * 60 * 60 * 24 * 7;
-  return Math.floor(diff / oneWeek) + 1;
-}

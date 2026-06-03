@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, getISOWeek, getISOWeekYear } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -138,8 +138,7 @@ export function ApprovalDashboard({
 
   const hasEdits = (submission: SubmissionWithReviews) => {
     const review = submission.reviews[0];
-    if (!review) return false;
-    return review.editedTerseVersion && review.editedTerseVersion !== review.aiTerseVersion;
+    return Boolean(review?.comment && review.comment.trim().length > 0);
   };
 
   if (submissions.length === 0) {
@@ -342,7 +341,8 @@ export function ApprovalDashboard({
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {submission.year}-W{submission.weekNumber.toString().padStart(2, "0")}
+                        {getISOWeekYear(new Date(submission.weekOf))}-W
+                        {getISOWeek(new Date(submission.weekOf)).toString().padStart(2, "0")}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -439,27 +439,10 @@ export function ApprovalDashboard({
                           </div>
                           {edited && review && (
                             <div>
-                              <h4 className="text-sm font-medium mb-2">Edit History</h4>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white p-3 rounded border text-sm">
-                                  <div className="text-xs text-muted-foreground mb-1">
-                                    AI Output
-                                  </div>
-                                  {review.aiTerseVersion || "N/A"}
-                                </div>
-                                <div className="bg-white p-3 rounded border text-sm">
-                                  <div className="text-xs text-muted-foreground mb-1">
-                                    After Edits
-                                  </div>
-                                  {review.editedTerseVersion || "N/A"}
-                                </div>
+                              <h4 className="text-sm font-medium mb-2">Reviewer Notes</h4>
+                              <div className="bg-white p-3 rounded border text-sm">
+                                {review.comment || "No notes provided."}
                               </div>
-                              {review.notes && (
-                                <div className="mt-2 text-sm">
-                                  <span className="font-medium">Reviewer Notes:</span>{" "}
-                                  {review.notes}
-                                </div>
-                              )}
                             </div>
                           )}
                           <div className="text-sm text-muted-foreground">

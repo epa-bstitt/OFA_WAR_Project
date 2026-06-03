@@ -80,10 +80,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <PageHeader
         title="Contract Updates"
         description="Edit this week's updates by contract. Open any card to review its full submission history."
-        section="Contributor Workspace"
-        breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
-        ]}
       />
 
       {sessionUserRole === "CONTRIBUTOR" && contributorUsers.length > 0 ? (
