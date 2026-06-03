@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getProviders, signIn } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,12 +47,31 @@ function setCookie(name: string, value: string, days: number = 7) {
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState<DemoRole | null>(null);
+  const [isLoginGovLoading, setIsLoginGovLoading] = useState(false);
+  const [isLoginGovAvailable, setIsLoginGovAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Auto-enable mock mode on page load for demo
   useEffect(() => {
     setCookie("admin-mock-mode", "true");
+
+    void getProviders().then((providers) => {
+      setIsLoginGovAvailable(Boolean(providers?.logingov));
+    });
   }, []);
+
+  const handleLoginGovSignIn = async () => {
+    setError(null);
+    setIsLoginGovLoading(true);
+
+    try {
+      await signIn("logingov", { callbackUrl: "/dashboard" });
+    } catch (err) {
+      console.error("Login.gov sign-in error:", err);
+      setError("Unable to start Login.gov sign-in. Please try again.");
+      setIsLoginGovLoading(false);
+    }
+  };
 
   const handleDemoLogin = async (role: DemoRole) => {
     setIsLoading(role);
@@ -64,11 +83,6 @@ export default function LoginPage() {
     try {
       setCookie("admin-mock-mode", "true");
       setCookie("admin-mock-role", role);
-
-      await signIn("demo", {
-        role,
-        redirect: false,
-      });
 
       router.push(destination);
       router.refresh();
@@ -88,20 +102,30 @@ export default function LoginPage() {
           <CardDescription>
             Weekly Activity Report Management System
           </CardDescription>
-          <div className="pt-1">
-            <Badge variant="outline">Jake was here</Badge>
-          </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {isLoginGovAvailable && (
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                size="lg"
+                disabled={isLoading !== null || isLoginGovLoading}
+                onClick={handleLoginGovSignIn}
+              >
+                {isLoginGovLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in with Login.gov"}
+              </Button>
+            </div>
+          )}
+
           {/* EPA MAX Login */}
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground text-center">
-              All login buttons use demo mode and bypass external authentication
+              Demo login bypasses external authentication for local testing
             </p>
             <Button 
               className="w-full" 
               size="lg"
-              disabled={isLoading !== null}
+              disabled={isLoading !== null || isLoginGovLoading}
               onClick={() => handleDemoLogin("contributor")}
             >
               Continue to Dashboard
@@ -131,7 +155,7 @@ export default function LoginPage() {
                   key={role.id}
                   variant="outline"
                   onClick={() => handleDemoLogin(role.id)}
-                  disabled={isLoading !== null}
+                  disabled={isLoading !== null || isLoginGovLoading}
                   className="flex flex-col items-center h-auto py-3 px-2"
                 >
                   {isLoadingThis ? (
@@ -153,7 +177,7 @@ export default function LoginPage() {
           )}
 
           <p className="text-xs text-muted-foreground text-center">
-            Demo mode is enabled for all login options
+            Use Login.gov in production and demo mode for non-production testing
           </p>
         </CardContent>
       </Card>

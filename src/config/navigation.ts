@@ -5,6 +5,7 @@ import {
   CheckCircle,
   Users,
   FileSearch,
+  Upload,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -32,6 +33,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Users", href: "/admin/users", icon: Users },
     { label: "Audit Log", href: "/admin/audit", icon: FileSearch },
+    { label: "WAR Import", href: "/admin/import", icon: Upload },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ],
 };

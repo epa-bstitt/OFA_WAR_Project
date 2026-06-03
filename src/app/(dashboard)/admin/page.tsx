@@ -11,6 +11,7 @@ import {
   Settings,
   Database,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { auth } from "@/lib/auth";
@@ -81,6 +82,13 @@ export default async function AdminDashboardPage() {
       href: "/admin/settings",
       icon: Settings,
       color: "bg-purple-500",
+    },
+    {
+      title: "WAR Import",
+      description: "Upload ZIP of DOCX files and populate WAR cards",
+      href: "/admin/import",
+      icon: Upload,
+      color: "bg-indigo-500",
     },
     {
       title: "Database",

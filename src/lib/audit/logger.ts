@@ -36,6 +36,7 @@ export type AuditAction =
   | "NOTIFICATION_FAILED"
   | "AUDIT_LOG_VIEWED"
   | "DATA_EXPORTED"
+  | "DATA_IMPORTED"
   | "RETENTION_ENFORCED";
 
 // Resource types

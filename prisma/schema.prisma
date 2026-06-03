@@ -25,8 +25,58 @@ model User {
   projectAssignments         ProjectAssignment[]
   notifications              Notification[]
   assignedContracts          Contract[]          @relation("ContractAssignee")
+  importJobs                 ImportJob[]
 
   @@map("users")
+}
+
+model ImportJob {
+  id                 String                @id @default(cuid())
+  initiatedById      String?
+  archiveName        String
+  archiveHash        String?
+  dryRun             Boolean               @default(true)
+  status             String                @default("PENDING")
+  filesProcessed     Int                   @default(0)
+  projectsUpserted   Int                   @default(0)
+  usersUpserted      Int                   @default(0)
+  assignmentsCreated Int                   @default(0)
+  submissionsCreated Int                   @default(0)
+  warnings           String?
+  errorMessage       String?
+  startedAt          DateTime              @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  initiatedBy        User?                 @relation(fields: [initiatedById], references: [id])
+  fileResults        ImportJobFileResult[]
+
+  @@index([initiatedById])
+  @@index([status])
+  @@index([createdAt])
+  @@map("import_jobs")
+}
+
+model ImportJobFileResult {
+  id                 String    @id @default(cuid())
+  jobId              String
+  sourcePath         String
+  category           String
+  title              String
+  projectId          String?
+  status             String    @default("COMPLETED")
+  message            String?
+  usersUpserted      Int       @default(0)
+  assignmentsCreated Int       @default(0)
+  submissionsCreated Int       @default(0)
+  warnings           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  job                ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([status])
+  @@map("import_job_file_results")
 }
 
 model Contract {

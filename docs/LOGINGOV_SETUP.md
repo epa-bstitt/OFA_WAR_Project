@@ -3,6 +3,32 @@
 ## Overview
 This guide provides step-by-step instructions for configuring Login.gov authentication for the EPA Business Platform. Login.gov is the federal government's secure sign-in service that offers two-factor authentication (2FA) and strong protections for federal systems.
 
+## Current Code Implementation
+
+The app now includes a NextAuth OIDC provider with id `logingov` in `src/lib/auth.ts`.
+
+### Required environment variables
+
+- `LOGIN_GOV_CLIENT_ID` (or `LOGINGOV_CLIENT_ID`)
+- `LOGIN_GOV_CLIENT_SECRET` (or `LOGINGOV_CLIENT_SECRET`)
+- `LOGIN_GOV_ISSUER` (or `LOGINGOV_ISSUER`)
+
+Optional:
+
+- `LOGIN_GOV_SCOPE` (default: `openid email profile`)
+- `LOGIN_GOV_ACR_VALUES` (default: `http://idmanagement.gov/ns/assurance/ial/1`)
+
+When configured, the login page automatically shows a **Sign in with Login.gov** button.
+
+### Cloud.gov example
+
+```bash
+cf set-env epa-business-platform LOGIN_GOV_CLIENT_ID "your-client-id"
+cf set-env epa-business-platform LOGIN_GOV_CLIENT_SECRET "your-client-secret"
+cf set-env epa-business-platform LOGIN_GOV_ISSUER "https://idp.int.identitysandbox.gov/openid_connect"
+cf restage epa-business-platform
+```
+
 ## Prerequisites
 
 1. **EPA Access**: EPA IT approval for Login.gov integration

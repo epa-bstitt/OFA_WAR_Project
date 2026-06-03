@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import AzureADB2C from "next-auth/providers/azure-ad-b2c";
 import Credentials from "next-auth/providers/credentials";
+import OIDC from "next-auth/providers/oidc";
 import type { Session } from "next-auth";
 import { cookies } from "next/headers";
 
@@ -16,6 +17,12 @@ export const isAzureAdB2CConfigured = Boolean(
     process.env.AZURE_AD_B2C_CLIENT_SECRET &&
     process.env.AZURE_AD_B2C_TENANT_NAME
 );
+
+const loginGovClientId = process.env.LOGIN_GOV_CLIENT_ID ?? process.env.LOGINGOV_CLIENT_ID;
+const loginGovClientSecret = process.env.LOGIN_GOV_CLIENT_SECRET ?? process.env.LOGINGOV_CLIENT_SECRET;
+const loginGovIssuer = process.env.LOGIN_GOV_ISSUER ?? process.env.LOGINGOV_ISSUER;
+
+export const isLoginGovConfigured = Boolean(loginGovClientId && loginGovClientSecret && loginGovIssuer);
 
 const demoUsers: Record<string, { id: string; name: string; email: string; role: string }> = {
   contributor: {
@@ -89,6 +96,41 @@ const {
         return null;
       },
     }),
+    ...(isLoginGovConfigured
+      ? [
+          OIDC({
+            id: "logingov",
+            name: "Login.gov",
+            clientId: loginGovClientId!,
+            clientSecret: loginGovClientSecret,
+            issuer: loginGovIssuer,
+            authorization: {
+              params: {
+                scope: process.env.LOGIN_GOV_SCOPE ?? "openid email profile",
+                acr_values:
+                  process.env.LOGIN_GOV_ACR_VALUES ??
+                  "http://idmanagement.gov/ns/assurance/ial/1",
+              },
+            },
+            profile(profile) {
+              const loginGovProfile = profile as Record<string, unknown>;
+              const firstName = (loginGovProfile.given_name as string | undefined) ?? "";
+              const lastName = (loginGovProfile.family_name as string | undefined) ?? "";
+              const fullName = `${firstName} ${lastName}`.trim();
+              const subject = String(loginGovProfile.sub ?? "");
+
+              return {
+                id: subject,
+                name: fullName || null,
+                email: String(loginGovProfile.email ?? ""),
+                image: null,
+                role: "CONTRIBUTOR",
+                azureAdId: subject,
+              };
+            },
+          }),
+        ]
+      : []),
     // Azure AD B2C (only if env vars are configured)
     ...(isAzureAdB2CConfigured ? [AzureADB2C({
       clientId: process.env.AZURE_AD_B2C_CLIENT_ID,
@@ -116,16 +158,16 @@ const {
       // For demo credentials provider, user is returned directly
       if (user) {
         token.sub = user.id;
-        token.role = user.role;
-        token.azureAdId = user.azureAdId;
+        token.role = user.role ?? "CONTRIBUTOR";
+        token.azureAdId = user.azureAdId ?? user.id;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub!;
-        session.user.role = token.role as string;
-        session.user.azureAdId = token.azureAdId as string;
+        session.user.role = (token.role as string) ?? "CONTRIBUTOR";
+        session.user.azureAdId = (token.azureAdId as string) ?? token.sub!;
       }
       return session;
     },
