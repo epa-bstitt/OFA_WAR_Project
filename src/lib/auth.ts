@@ -1,7 +1,6 @@
 import NextAuth from "next-auth";
 import AzureADB2C from "next-auth/providers/azure-ad-b2c";
 import Credentials from "next-auth/providers/credentials";
-import OIDC from "next-auth/providers/oidc";
 import type { Session } from "next-auth";
 import { cookies } from "next/headers";
 
@@ -23,6 +22,40 @@ const loginGovClientSecret = process.env.LOGIN_GOV_CLIENT_SECRET ?? process.env.
 const loginGovIssuer = process.env.LOGIN_GOV_ISSUER ?? process.env.LOGINGOV_ISSUER;
 
 export const isLoginGovConfigured = Boolean(loginGovClientId && loginGovClientSecret && loginGovIssuer);
+
+function buildLoginGovProvider() {
+  return {
+    id: "logingov",
+    name: "Login.gov",
+    type: "oidc",
+    clientId: loginGovClientId!,
+    clientSecret: loginGovClientSecret,
+    issuer: loginGovIssuer,
+    authorization: {
+      params: {
+        scope: process.env.LOGIN_GOV_SCOPE ?? "openid email profile",
+        acr_values:
+          process.env.LOGIN_GOV_ACR_VALUES ??
+          "http://idmanagement.gov/ns/assurance/ial/1",
+      },
+    },
+    profile(profile: Record<string, unknown>) {
+      const firstName = (profile.given_name as string | undefined) ?? "";
+      const lastName = (profile.family_name as string | undefined) ?? "";
+      const fullName = `${firstName} ${lastName}`.trim();
+      const subject = String(profile.sub ?? "");
+
+      return {
+        id: subject,
+        name: fullName || null,
+        email: String(profile.email ?? ""),
+        image: null,
+        role: "CONTRIBUTOR",
+        azureAdId: subject,
+      };
+    },
+  };
+}
 
 const demoUsers: Record<string, { id: string; name: string; email: string; role: string }> = {
   contributor: {
@@ -98,37 +131,7 @@ const {
     }),
     ...(isLoginGovConfigured
       ? [
-          OIDC({
-            id: "logingov",
-            name: "Login.gov",
-            clientId: loginGovClientId!,
-            clientSecret: loginGovClientSecret,
-            issuer: loginGovIssuer,
-            authorization: {
-              params: {
-                scope: process.env.LOGIN_GOV_SCOPE ?? "openid email profile",
-                acr_values:
-                  process.env.LOGIN_GOV_ACR_VALUES ??
-                  "http://idmanagement.gov/ns/assurance/ial/1",
-              },
-            },
-            profile(profile) {
-              const loginGovProfile = profile as Record<string, unknown>;
-              const firstName = (loginGovProfile.given_name as string | undefined) ?? "";
-              const lastName = (loginGovProfile.family_name as string | undefined) ?? "";
-              const fullName = `${firstName} ${lastName}`.trim();
-              const subject = String(loginGovProfile.sub ?? "");
-
-              return {
-                id: subject,
-                name: fullName || null,
-                email: String(loginGovProfile.email ?? ""),
-                image: null,
-                role: "CONTRIBUTOR",
-                azureAdId: subject,
-              };
-            },
-          }),
+          buildLoginGovProvider(),
         ]
       : []),
     // Azure AD B2C (only if env vars are configured)
