@@ -6,90 +6,169 @@ interface SubmissionPeriod {
   deadline: Date;
 }
 
-function getNthWeekdayOfMonth(year: number, monthIndex: number, weekday: number, nth: number): Date {
-  const firstOfMonth = new Date(year, monthIndex, 1, 0, 0, 0, 0);
-  const firstWeekdayOffset = (7 + weekday - firstOfMonth.getDay()) % 7;
-  const dayOfMonth = 1 + firstWeekdayOffset + (nth - 1) * 7;
-  return new Date(year, monthIndex, dayOfMonth, 17, 0, 0, 0);
+const SUBMISSION_TIME_ZONE = "America/New_York";
+const BIWEEK_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ANCHOR_YEAR = 2026;
+const ANCHOR_MONTH_INDEX = 5; // June (0-indexed)
+const ANCHOR_DAY = 30;
+
+function getZonedParts(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
+
+  return {
+    weekday: get("weekday"),
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+    second: Number(get("second")),
+  };
 }
 
-function getMonthDeadlines(year: number, monthIndex: number): Date[] {
-  const firstTuesday = getNthWeekdayOfMonth(year, monthIndex, 2, 1);
-  const thirdTuesday = getNthWeekdayOfMonth(year, monthIndex, 2, 3);
-  return [firstTuesday, thirdTuesday];
+function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
+  const zoned = getZonedParts(date, timeZone);
+  const asUtc = Date.UTC(
+    zoned.year,
+    zoned.month - 1,
+    zoned.day,
+    zoned.hour,
+    zoned.minute,
+    zoned.second
+  );
+
+  return asUtc - date.getTime();
 }
 
-function getPeriodId(year: number, monthIndex: number, slot: 1 | 2): string {
-  const month = String(monthIndex + 1).padStart(2, "0");
-  return `${year}-${month}-P${slot}`;
+function zonedDateTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string
+): Date {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+  const firstOffset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
+  const firstPass = utcGuess - firstOffset;
+  const secondOffset = getTimeZoneOffsetMs(new Date(firstPass), timeZone);
+
+  return new Date(utcGuess - secondOffset);
 }
 
-function getPeriodLabel(year: number, monthIndex: number, slot: 1 | 2): string {
-  const monthLabel = new Date(year, monthIndex, 1).toLocaleDateString("en-US", {
+function getEtDateByOffset(offset: number) {
+  const anchorUtcDay = Date.UTC(ANCHOR_YEAR, ANCHOR_MONTH_INDEX, ANCHOR_DAY);
+  const targetUtcDay = anchorUtcDay + offset * BIWEEK_DAYS * DAY_MS;
+  const target = new Date(targetUtcDay);
+
+  return {
+    year: target.getUTCFullYear(),
+    month: target.getUTCMonth() + 1,
+    day: target.getUTCDate(),
+  };
+}
+
+function getDayDiffFromAnchor(date: Date): number {
+  const zoned = getZonedParts(date, SUBMISSION_TIME_ZONE);
+  const anchorUtcDay = Date.UTC(ANCHOR_YEAR, ANCHOR_MONTH_INDEX, ANCHOR_DAY);
+  const targetUtcDay = Date.UTC(zoned.year, zoned.month - 1, zoned.day);
+  return Math.floor((targetUtcDay - anchorUtcDay) / DAY_MS);
+}
+
+function getBiweeklyOffsetForDate(date: Date): number {
+  return Math.floor(getDayDiffFromAnchor(date) / BIWEEK_DAYS);
+}
+
+function getDeadlineByOffset(offset: number): Date {
+  const etDate = getEtDateByOffset(offset);
+  return zonedDateTimeToUtc(
+    etDate.year,
+    etDate.month,
+    etDate.day,
+    17,
+    0,
+    0,
+    SUBMISSION_TIME_ZONE
+  );
+}
+
+function getPeriodIdByOffset(offset: number): string {
+  const etDate = getEtDateByOffset(offset);
+  const month = String(etDate.month).padStart(2, "0");
+  const day = String(etDate.day).padStart(2, "0");
+  return `${etDate.year}-${month}-${day}`;
+}
+
+function getPeriodLabel(deadline: Date): string {
+  const dateLabel = deadline.toLocaleDateString("en-US", {
+    timeZone: SUBMISSION_TIME_ZONE,
     month: "short",
+    day: "numeric",
     year: "numeric",
   });
-  const slotLabel = slot === 1 ? "1st Tuesday" : "3rd Tuesday";
-  return `${monthLabel} (${slotLabel} Deadline)`;
+
+  return `${dateLabel} (Biweekly Tuesday Deadline)`;
 }
 
-function buildPeriodsForWindow(startMonth: Date, monthsToGenerate: number): SubmissionPeriod[] {
-  const periods: SubmissionPeriod[] = [];
-  let previousDeadline = new Date(startMonth);
-  previousDeadline.setDate(1);
-  previousDeadline.setMonth(previousDeadline.getMonth() - 1);
-  previousDeadline = getMonthDeadlines(previousDeadline.getFullYear(), previousDeadline.getMonth())[1];
-
-  for (let i = 0; i < monthsToGenerate; i += 1) {
-    const cursor = new Date(startMonth);
-    cursor.setDate(1);
-    cursor.setMonth(startMonth.getMonth() + i);
-
-    const year = cursor.getFullYear();
-    const monthIndex = cursor.getMonth();
-    const [firstTuesdayDeadline, thirdTuesdayDeadline] = getMonthDeadlines(year, monthIndex);
-
-    const firstPeriodStart = new Date(previousDeadline.getTime() + 1);
-    periods.push({
-      id: getPeriodId(year, monthIndex, 1),
-      label: getPeriodLabel(year, monthIndex, 1),
-      start: firstPeriodStart,
-      end: new Date(firstTuesdayDeadline),
-      deadline: new Date(firstTuesdayDeadline),
-    });
-
-    const secondPeriodStart = new Date(firstTuesdayDeadline.getTime() + 1);
-    periods.push({
-      id: getPeriodId(year, monthIndex, 2),
-      label: getPeriodLabel(year, monthIndex, 2),
-      start: secondPeriodStart,
-      end: new Date(thirdTuesdayDeadline),
-      deadline: new Date(thirdTuesdayDeadline),
-    });
-
-    previousDeadline = thirdTuesdayDeadline;
-  }
-
-  return periods;
+function getCurrentPeriodOffset(now: Date): number {
+  const baseOffset = getBiweeklyOffsetForDate(now);
+  const baseDeadline = getDeadlineByOffset(baseOffset);
+  return now.getTime() <= baseDeadline.getTime() ? baseOffset : baseOffset + 1;
 }
 
-export function isFirstOrThirdTuesday(date: Date): boolean {
-  if (date.getDay() !== 2) {
+function buildPeriodForOffset(offset: number): SubmissionPeriod {
+  const deadline = getDeadlineByOffset(offset);
+  const previousDeadline = getDeadlineByOffset(offset - 1);
+
+  return {
+    id: getPeriodIdByOffset(offset),
+    label: getPeriodLabel(deadline),
+    start: new Date(previousDeadline.getTime() + 1),
+    end: new Date(deadline),
+    deadline: new Date(deadline),
+  };
+}
+
+export function isBiweeklySubmissionTuesday(date: Date): boolean {
+  const zoned = getZonedParts(date, SUBMISSION_TIME_ZONE);
+  if (zoned.weekday !== "Tue") {
     return false;
   }
 
-  const day = date.getDate();
-  return (day >= 1 && day <= 7) || (day >= 15 && day <= 21);
+  const remainder = ((getDayDiffFromAnchor(date) % 14) + 14) % 14;
+  return remainder === 0;
+}
+
+// Backwards-compatible alias retained for existing imports.
+export function isFirstOrThirdTuesday(date: Date): boolean {
+  return isBiweeklySubmissionTuesday(date);
 }
 
 export function isSubmissionWindowOpen(now: Date = new Date()): boolean {
-  if (!isFirstOrThirdTuesday(now)) {
+  if (!isBiweeklySubmissionTuesday(now)) {
     return false;
   }
 
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
+  const zoned = getZonedParts(now, SUBMISSION_TIME_ZONE);
+  const hours = zoned.hour;
+  const minutes = zoned.minute;
+  const seconds = zoned.second;
 
   if (hours < 8 || hours > 17) {
     return false;
@@ -102,35 +181,54 @@ export function isSubmissionWindowOpen(now: Date = new Date()): boolean {
   return true;
 }
 
-export function getCurrentSubmissionPeriod(now: Date = new Date()): SubmissionPeriod {
-  const windowStart = new Date(now);
-  windowStart.setDate(1);
-  windowStart.setMonth(windowStart.getMonth() - 2);
-
-  const periods = buildPeriodsForWindow(windowStart, 6);
-  const current = periods.find((period) => now >= period.start && now <= period.end);
-
-  if (current) {
-    return current;
+export function isBiweeklyReminderTime(now: Date = new Date()): boolean {
+  if (!isBiweeklySubmissionTuesday(now)) {
+    return false;
   }
 
-  const next = periods.find((period) => now < period.start);
-  return next ?? periods[periods.length - 1];
+  const zoned = getZonedParts(now, SUBMISSION_TIME_ZONE);
+  return zoned.hour === 8 && zoned.minute === 0;
+}
+
+export function getCurrentSubmissionPeriod(now: Date = new Date()): SubmissionPeriod {
+  return buildPeriodForOffset(getCurrentPeriodOffset(now));
 }
 
 export function getRecentSubmissionPeriods(now: Date = new Date(), count: number = 8): SubmissionPeriod[] {
-  const current = getCurrentSubmissionPeriod(now);
-  const [year, monthString] = current.id.split("-");
-  const monthIndex = Number(monthString) - 1;
+  const currentOffset = getCurrentPeriodOffset(now);
+  const periods: SubmissionPeriod[] = [];
 
-  const windowStart = new Date(Number(year), monthIndex, 1);
-  windowStart.setMonth(windowStart.getMonth() - 5);
+  for (let index = 0; index < count; index += 1) {
+    periods.push(buildPeriodForOffset(currentOffset - index));
+  }
 
-  const periods = buildPeriodsForWindow(windowStart, 12);
-  const currentIndex = periods.findIndex((period) => period.id === current.id);
-  const startIndex = Math.max(0, currentIndex - (count - 1));
+  return periods;
+}
 
-  return periods.slice(startIndex, currentIndex + 1).reverse();
+export function getSubmissionPeriodsFromJanuary(now: Date = new Date()): SubmissionPeriod[] {
+  const currentOffset = getCurrentPeriodOffset(now);
+  const currentEt = getZonedParts(now, SUBMISSION_TIME_ZONE);
+  const januaryStart = zonedDateTimeToUtc(
+    currentEt.year,
+    1,
+    1,
+    0,
+    0,
+    0,
+    SUBMISSION_TIME_ZONE
+  );
+
+  let firstOffset = getBiweeklyOffsetForDate(januaryStart);
+  while (getDeadlineByOffset(firstOffset).getTime() < januaryStart.getTime()) {
+    firstOffset += 1;
+  }
+
+  const periods: SubmissionPeriod[] = [];
+  for (let offset = currentOffset; offset >= firstOffset; offset -= 1) {
+    periods.push(buildPeriodForOffset(offset));
+  }
+
+  return periods;
 }
 
 export type { SubmissionPeriod };

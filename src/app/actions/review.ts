@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 // import { getContractsOutlook, MOCK_CONTRACT_ASSIGNEES } from "@/lib/mock-contracts";
-import { getCurrentSubmissionPeriod, getRecentSubmissionPeriods } from "@/lib/submission-periods";
+import { getCurrentSubmissionPeriod, getSubmissionPeriodsFromJanuary } from "@/lib/submission-periods";
 // import { isMockModeEnabled } from "@/lib/admin/mock-mode-server";
 import { logWorkflowEvent } from "@/lib/audit/logger";
 
@@ -167,7 +167,7 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
 
     const now = new Date();
     const currentPeriod = getCurrentSubmissionPeriod(now);
-    const periodsToLoad = getRecentSubmissionPeriods(now, 8);
+    const periodsToLoad = getSubmissionPeriodsFromJanuary(now);
 
     const contributors = await prisma.user.findMany({
       where: {

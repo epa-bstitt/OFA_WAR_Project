@@ -14,7 +14,7 @@ import {
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { auth } from "@/lib/auth";
 import { getContractsOutlookFromDb } from "@/lib/contracts-db";
-import { getCurrentSubmissionPeriod, getRecentSubmissionPeriods } from "@/lib/submission-periods";
+import { getCurrentSubmissionPeriod, getSubmissionPeriodsFromJanuary } from "@/lib/submission-periods";
 
 export const metadata: Metadata = {
   title: "WAR Review",
@@ -55,7 +55,7 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
   const contractById = new Map(contracts.map((contract) => [contract.id, contract]));
   const now = new Date();
   const currentPeriod = getCurrentSubmissionPeriod(now);
-  const recentPeriods = getRecentSubmissionPeriods(now, 6);
+  const recentPeriods = getSubmissionPeriodsFromJanuary(now);
 
   const overseerSubmissions = submissions.map((submission) => {
     const summary = submission.rawText.trim();
@@ -143,23 +143,36 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     }),
   }));
 
-  const exportContracts = cardEligibleSubmissions
+  const currentPeriodApproved = cardEligibleSubmissions
     .filter((submission) => {
-      if (submission.status !== "APPROVED") {
+      if (submission.status !== "APPROVED" && submission.status !== "PUBLISHED") {
         return false;
       }
 
       const weekOf = new Date(submission.weekOf);
       return weekOf >= currentPeriod.start && weekOf <= currentPeriod.end;
     })
-    .map((submission) => ({
-      id: submission.id,
-      name: submission.contractName,
-      category: (
-        submission.contractCategory === "New Awards and Recompetes" ? "recompetes" : "outlook"
-      ) as "recompetes" | "outlook",
-      periodId: currentPeriod.id,
-    }));
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+
+  const latestSubmissionByContract = new Map<string, (typeof currentPeriodApproved)[number]>();
+  for (const submission of currentPeriodApproved) {
+    const contractKey = submission.contractId ?? submission.id;
+    if (!latestSubmissionByContract.has(contractKey)) {
+      latestSubmissionByContract.set(contractKey, submission);
+    }
+  }
+
+  const exportContracts = Array.from(latestSubmissionByContract.values()).map((submission) => ({
+    id: submission.id,
+    name: submission.contractName,
+    category: (
+      submission.contractCategory === "New Awards and Recompetes" ? "recompetes" : "outlook"
+    ) as "recompetes" | "outlook",
+    periodId: currentPeriod.id,
+  }));
 
   return (
     <div className="space-y-6">

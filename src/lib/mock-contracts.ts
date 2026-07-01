@@ -29,6 +29,7 @@ export interface MockContract {
   id: string;
   category: string;
   assigneeIds?: string[];
+  assignees?: Array<{ id: string; name: string; email: string }>;
   contractName: string;
   imageUrl: string;
   imageAlt: string;

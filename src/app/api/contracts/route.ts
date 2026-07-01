@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { hasMinimumRole } from "@/lib/auth";
 import { createContractInDb, getContractsOutlookFromDb } from "@/lib/contracts-db";
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,23 @@ export async function GET() {
   }
 
   const contracts = await getContractsOutlookFromDb();
-  return NextResponse.json({ contracts });
+  const contributors = await prisma.user.findMany({
+    where: {
+      role: "CONTRIBUTOR",
+      isActive: true,
+    },
+    orderBy: [
+      { name: "asc" },
+      { email: "asc" },
+    ],
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  });
+
+  return NextResponse.json({ contracts, contributors });
 }
 
 export async function POST(request: NextRequest) {

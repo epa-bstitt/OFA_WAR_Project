@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { ContractUpdateCards } from "@/components/features/dashboard/ContractUpdateCards";
 import { auth } from "@/lib/auth";
 import { isEnhancedContractSubmissionsEnabled } from "@/lib/feature-flags";
-import { getMockContractsForUserFromDb } from "@/lib/contracts-db";
+import { getContractsOutlookFromDb, getMockContractsForUserFromDb } from "@/lib/contracts-db";
 import { getStoredSettings } from "@/app/api/admin/settings/store";
 import { getOverseerSettings } from "@/lib/overseer-settings";
 
@@ -20,8 +20,23 @@ export const dynamic = "force-dynamic";
 
 export default async function SubmitPage() {
   const session = await auth();
+  const allContracts = await getContractsOutlookFromDb();
   const contracts = await getMockContractsForUserFromDb(session?.user?.id ?? "demo-admin");
   const submitContracts = contracts.filter((contract) => isContributorVisibleContract(contract.category));
+  const contributorDirectory = Array.from(
+    new Map(
+      allContracts.flatMap((contract) =>
+        (contract.assignees ?? []).map((assignee) => [
+          assignee.id,
+          {
+            id: assignee.id,
+            name: assignee.name || assignee.id,
+            email: assignee.email || "",
+          },
+        ])
+      )
+    ).values()
+  );
   const storedSettings = await getStoredSettings();
   const contributorAccess = getOverseerSettings(storedSettings).contributorAccess;
   const enhancedEditorEnabled =
@@ -35,6 +50,7 @@ export default async function SubmitPage() {
       />
       <ContractUpdateCards
         contracts={submitContracts}
+        contributorDirectory={contributorDirectory}
         enhancedEditorEnabled={enhancedEditorEnabled}
         submissionsEnabled={contributorAccess.submissionEnabled}
         deadlineOverrideEnabled={contributorAccess.deadlineOverrideEnabled}

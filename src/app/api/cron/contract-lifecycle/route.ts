@@ -28,6 +28,25 @@ function toTimestamp(value: string) {
   return Number.isNaN(parsed) ? Number.NaN : parsed;
 }
 
+function getLifecycleTriggerDate(
+  contract: {
+    category: string;
+    activeContract: { paltOitoEngagement?: string; ultimateCompletionDate?: string };
+  }
+) {
+  if (contract.category === RECOMPETES_CATEGORY) {
+    const awardComplete = contract.activeContract.paltOitoEngagement?.trim() ?? "";
+    return awardComplete || null;
+  }
+
+  if (contract.category === OUTLOOK_CATEGORY) {
+    const ultimateCompletionDate = contract.activeContract.ultimateCompletionDate?.trim() ?? "";
+    return ultimateCompletionDate || null;
+  }
+
+  return null;
+}
+
 function getTargetCategory(currentCategory: string) {
   if (currentCategory === RECOMPETES_CATEGORY) {
     return OUTLOOK_CATEGORY;
@@ -57,7 +76,11 @@ export async function GET(request: NextRequest) {
       return false;
     }
 
-    const endTs = toTimestamp(contract.activeContract.ultimateCompletionDate);
+    const triggerDate = getLifecycleTriggerDate(contract);
+    if (!triggerDate) {
+      return false;
+    }
+    const endTs = toTimestamp(triggerDate);
     return !Number.isNaN(endTs) && endTs <= today.getTime();
   });
 
@@ -81,6 +104,12 @@ export async function GET(request: NextRequest) {
         co: contract.activeContract.co,
         cs: contract.activeContract.cs,
         orderNumber: contract.activeContract.orderNumber,
+        palt: contract.activeContract.palt ?? "",
+        paltProcurementType: contract.activeContract.paltProcurementType ?? "",
+        paltDollarValue: contract.activeContract.paltDollarValue ?? "",
+        paltBeginOitoEngagement: contract.activeContract.paltBeginOitoEngagement ?? "",
+        paltOitoEngagement: contract.activeContract.paltOitoEngagement ?? "",
+        paltMilestones: contract.activeContract.paltMilestones ?? "",
         category: targetCategory,
         assigneeIds: contract.assigneeIds ?? [],
       });

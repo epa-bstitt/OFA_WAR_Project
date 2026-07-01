@@ -50,6 +50,8 @@ interface ContractFormState {
   co: string;
   cs: string;
   orderNumber: string;
+  paltBeginOitoEngagement: string;
+  paltOitoEngagement: string;
 }
 
 type FormMode = "outlook" | "recompetes";
@@ -57,12 +59,6 @@ type FormMode = "outlook" | "recompetes";
 const RECOMPETES_CATEGORY = "New Awards and Recompetes";
 const LEGACY_CATEGORY = "Legacy Contracts";
 const OUTLOOK_CATEGORY = "Current and Active Contracts/Purchase Order Outlook";
-
-const TAB_LABELS: Record<"outlook" | "recompetes" | "legacy", string> = {
-  outlook: "Current and Active Contracts/Purchase Order Outlook",
-  recompetes: "New Awards and Recompetes",
-  legacy: "Legacy Contracts",
-};
 
 interface AssigneeOption {
   value: string;
@@ -90,42 +86,53 @@ function getCategoryForTab(tab: "outlook" | "recompetes" | "legacy") {
   return OUTLOOK_CATEGORY;
 }
 
-function getTabLabel(tab: "outlook" | "recompetes" | "legacy") {
-  return TAB_LABELS[tab];
-}
-
-function createAssigneeId(name: string, email: string) {
-  const base = email.trim() || name.trim();
-  return base
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-}
-
-function getAssigneeLabel(assigneeIds: string[], assigneeOptions: AssigneeOption[]) {
+function getAssigneeLabelForContract(contract: MockContract, assigneeOptions: AssigneeOption[]) {
+  const assigneeIds = contract.assigneeIds ?? [];
   if (assigneeIds.length === 0) {
     return "Unassigned";
   }
 
+  const contractAssigneeMap = new Map(
+    (contract.assignees ?? []).map((assignee) => [assignee.id, assignee])
+  );
+
   const labels = assigneeIds
-    .map((assigneeId) => assigneeOptions.find((option) => option.value === assigneeId)?.label)
+    .map((assigneeId) => {
+      const fromOptions = assigneeOptions.find((option) => option.value === assigneeId)?.label;
+      if (fromOptions) {
+        return fromOptions;
+      }
+
+      return contractAssigneeMap.get(assigneeId)?.name || assigneeId;
+    })
     .filter((label): label is string => Boolean(label));
 
   return labels.length > 0 ? labels.join(", ") : "Unassigned";
 }
 
-function getAssigneeDetails(assigneeIds: string[], assigneeOptions: AssigneeOption[]) {
-  return assigneeIds
+function getAssigneeDetailsForContract(contract: MockContract, assigneeOptions: AssigneeOption[]) {
+  const contractAssigneeMap = new Map(
+    (contract.assignees ?? []).map((assignee) => [assignee.id, assignee])
+  );
+
+  return (contract.assigneeIds ?? [])
     .map((assigneeId) => {
-      const assignee = assigneeOptions.find((option) => option.value === assigneeId);
-      if (!assignee) {
+      const fromOptions = assigneeOptions.find((option) => option.value === assigneeId);
+      if (fromOptions) {
+        return {
+          name: fromOptions.label,
+          email: fromOptions.email,
+        };
+      }
+
+      const fromContract = contractAssigneeMap.get(assigneeId);
+      if (!fromContract) {
         return null;
       }
 
       return {
-        name: assignee.label,
-        email: assignee.email,
+        name: fromContract.name,
+        email: fromContract.email,
       };
     })
     .filter((item): item is { name: string; email: string } => Boolean(item));
@@ -152,6 +159,8 @@ const EMPTY_FORM: ContractFormState = {
   co: "",
   cs: "",
   orderNumber: "",
+  paltBeginOitoEngagement: "",
+  paltOitoEngagement: "",
 };
 
 function toFormState(contract: MockContract): ContractFormState {
@@ -166,6 +175,8 @@ function toFormState(contract: MockContract): ContractFormState {
     co: contract.activeContract.co,
     cs: contract.activeContract.cs,
     orderNumber: contract.activeContract.orderNumber,
+    paltBeginOitoEngagement: contract.activeContract.paltBeginOitoEngagement ?? "",
+    paltOitoEngagement: contract.activeContract.paltOitoEngagement ?? "",
   };
 }
 
@@ -174,6 +185,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
   const [activeTab, setActiveTab] = useState("recompetes");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<MockContract | null>(null);
+  const [isLegacyHistoryDialogOpen, setIsLegacyHistoryDialogOpen] = useState(false);
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<FormMode>("outlook");
   const [formState, setFormState] = useState<ContractFormState>(EMPTY_FORM);
@@ -193,6 +205,34 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
   const [isLoadingLegacyHistory, setIsLoadingLegacyHistory] = useState(false);
   const [legacyHistoryError, setLegacyHistoryError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setAssigneeOptions((previousOptions) => {
+      const byId = new Map(previousOptions.map((option) => [option.value, option]));
+
+      for (const contract of contracts) {
+        for (const assignee of contract.assignees ?? []) {
+          if (!assignee.id) {
+            continue;
+          }
+
+          if (!byId.has(assignee.id)) {
+            byId.set(assignee.id, {
+              value: assignee.id,
+              label: assignee.name || assignee.id,
+              email: assignee.email || "",
+            });
+          }
+        }
+      }
+
+      return Array.from(byId.values());
+    });
+  }, [contracts]);
+
+  useEffect(() => {
+    void refreshContracts();
+  }, []);
+
   const isEditMode = Boolean(editingContractId);
 
   const sortedContracts = useMemo(() => {
@@ -203,7 +243,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
     dueSoonLimit.setDate(today.getDate() + 30);
 
     const filtered = contracts.filter((contract) => {
-      const assigneeLabel = getAssigneeLabel(contract.assigneeIds ?? [], assigneeOptions).toLowerCase();
+      const assigneeLabel = getAssigneeLabelForContract(contract, assigneeOptions).toLowerCase();
 
       if (normalizedSearch) {
         const text = [
@@ -240,8 +280,8 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
 
     const sorted = [...filtered].sort((a, b) => {
       if (sortBy === "assignee") {
-        return getAssigneeLabel(a.assigneeIds ?? [], assigneeOptions).localeCompare(
-          getAssigneeLabel(b.assigneeIds ?? [], assigneeOptions)
+        return getAssigneeLabelForContract(a, assigneeOptions).localeCompare(
+          getAssigneeLabelForContract(b, assigneeOptions)
         );
       }
 
@@ -317,6 +357,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
     if (!selectedContract) {
       setLegacyWarEntries([]);
       setLegacyHistoryError(null);
+      setIsLegacyHistoryDialogOpen(false);
       return;
     }
 
@@ -429,12 +470,24 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
   function validateForm(): Partial<Record<keyof ContractFormState, string>> {
     const nextErrors: Partial<Record<keyof ContractFormState, string>> = {};
 
-    if (!isAcceptedDateInput(formState.nextPeriodOfPerf)) {
-      nextErrors.nextPeriodOfPerf = "Use YYYY-MM-DD format.";
-    }
+    const dateFields: Array<keyof ContractFormState> =
+      formMode === "recompetes"
+        ? [
+            "paltBeginOitoEngagement",
+            "contractNumber",
+            "cs",
+            "orderNumber",
+            "nextPeriodOfPerf",
+            "office",
+            "ultimateCompletionDate",
+            "paltOitoEngagement",
+          ]
+        : ["nextPeriodOfPerf", "ultimateCompletionDate"];
 
-    if (!isAcceptedDateInput(formState.ultimateCompletionDate)) {
-      nextErrors.ultimateCompletionDate = "Use YYYY-MM-DD format.";
+    for (const field of dateFields) {
+      if (!isAcceptedDateInput(formState[field])) {
+        nextErrors[field] = "Use YYYY-MM-DD format.";
+      }
     }
 
     return nextErrors;
@@ -490,22 +543,8 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
       return;
     }
 
-    const nextOption: AssigneeOption = {
-      value: createAssigneeId(trimmedSearch, trimmedSearch.includes("@") ? trimmedSearch : ""),
-      label: trimmedSearch,
-      email: trimmedSearch.includes("@") ? trimmedSearch : "",
-    };
-
-    setAssigneeOptions((prev) => {
-      if (prev.some((option) => option.value === nextOption.value)) {
-        return prev;
-      }
-
-      return [...prev, nextOption];
-    });
-    addAssigneeToContract(nextOption.value);
-    setError(null);
-    toast.success(`${nextOption.label} added to the contract.`);
+    setError("Contributor not found. Select an existing contributor account.");
+    toast.error("Contributor not found. Select an existing contributor account.");
   }
 
   async function refreshContracts() {
@@ -516,7 +555,39 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
       throw new Error(payload?.error || "Failed to load contracts.");
     }
 
-    setContracts(payload.contracts);
+    const nextContracts: MockContract[] = Array.isArray(payload?.contracts) ? payload.contracts : [];
+    setContracts(nextContracts);
+
+    const contributorOptions: AssigneeOption[] = Array.isArray(payload?.contributors)
+      ? payload.contributors.map((contributor: { id: string; name: string | null; email: string | null }) => ({
+          value: contributor.id,
+          label: contributor.name?.trim() || contributor.email?.trim() || contributor.id,
+          email: contributor.email?.trim() || "",
+        }))
+      : [];
+
+    const existingContractAssigneeOptions: AssigneeOption[] = nextContracts
+      .flatMap((contract) => contract.assignees ?? [])
+      .map((assignee) => ({
+        value: assignee.id,
+        label: assignee.name,
+        email: assignee.email,
+      }));
+
+    const byId = new Map<string, AssigneeOption>();
+    for (const option of [
+      ...INITIAL_ASSIGNEE_OPTIONS,
+      ...contributorOptions,
+      ...existingContractAssigneeOptions,
+    ]) {
+      if (!option.value || byId.has(option.value)) {
+        continue;
+      }
+
+      byId.set(option.value, option);
+    }
+
+    setAssigneeOptions(Array.from(byId.values()));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -613,80 +684,6 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
     } finally {
       setIsSaving(false);
     }
-  }
-
-  async function handleMove(contractId: string, targetTab: "outlook" | "recompetes" | "legacy") {
-    const contract = contracts.find((item) => item.id === contractId);
-    if (!contract) {
-      return;
-    }
-
-    const targetCategory = getCategoryForTab(targetTab);
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/contracts/${contractId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contractName: contract.contractName,
-          cor: contract.activeContract.cor,
-          contractNumber: contract.activeContract.contractNumber,
-          office: contract.activeContract.office,
-          nextPeriodOfPerf: contract.activeContract.nextPeriodOfPerf,
-          ultimateCompletionDate: contract.activeContract.ultimateCompletionDate,
-          co: contract.activeContract.co,
-          cs: contract.activeContract.cs,
-          orderNumber: contract.activeContract.orderNumber,
-          category: targetCategory,
-          assigneeIds: contract.assigneeIds ?? [],
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error || "Failed to move contract.");
-      }
-
-      await refreshContracts();
-      setActiveTab(targetTab);
-      toast.success(`Contract moved to ${getTabLabel(targetTab)}.`);
-    } catch (moveError) {
-      const message = moveError instanceof Error ? moveError.message : "Failed to move contract.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  function getMoveTargets(currentTab: "outlook" | "recompetes" | "legacy") {
-    const allTargets: Array<{ value: "outlook" | "recompetes" | "legacy"; label: string }> = [
-      {
-        value: "outlook",
-        label: "Current and Active Contracts/Purchase Order Outlook",
-      },
-      {
-        value: "recompetes",
-        label: "New Awards and Recompetes",
-      },
-      {
-        value: "legacy",
-        label: "Legacy Contracts",
-      },
-    ];
-
-    if (currentTab === "recompetes") {
-      return allTargets.filter((target) => target.value === "outlook");
-    }
-
-    if (currentTab === "outlook") {
-      return allTargets.filter((target) => target.value === "recompetes" || target.value === "legacy");
-    }
-
-    return allTargets.filter((target) => target.value === "outlook");
   }
 
   function renderContractForm(idPrefix: string, mode: FormMode) {
@@ -851,26 +848,15 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
           <>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-ultimateCompletionDate`}>Contract End Date</Label>
+                <Label htmlFor={`${idPrefix}-paltBeginOitoEngagement`}>Begin ITOD Engagement</Label>
                 <Input
-                  id={`${idPrefix}-ultimateCompletionDate`}
-                  placeholder="YYYY-MM-DD"
-                  value={formState.ultimateCompletionDate}
-                  onChange={(event) => updateFormField("ultimateCompletionDate", event.target.value)}
-                  className={fieldErrors.ultimateCompletionDate ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
+                  id={`${idPrefix}-paltBeginOitoEngagement`}
+                  type="date"
+                  value={formState.paltBeginOitoEngagement}
+                  onChange={(event) => updateFormField("paltBeginOitoEngagement", event.target.value)}
+                  className={fieldErrors.paltBeginOitoEngagement ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
                 />
-                {fieldErrors.ultimateCompletionDate && <p className="text-xs text-rose-600">{fieldErrors.ultimateCompletionDate}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-nextPeriodOfPerf`}>PALT Start</Label>
-                <Input
-                  id={`${idPrefix}-nextPeriodOfPerf`}
-                  placeholder="YYYY-MM-DD"
-                  value={formState.nextPeriodOfPerf}
-                  onChange={(event) => updateFormField("nextPeriodOfPerf", event.target.value)}
-                  className={fieldErrors.nextPeriodOfPerf ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
-                />
-                {fieldErrors.nextPeriodOfPerf && <p className="text-xs text-rose-600">{fieldErrors.nextPeriodOfPerf}</p>}
+                {fieldErrors.paltBeginOitoEngagement && <p className="text-xs text-rose-600">{fieldErrors.paltBeginOitoEngagement}</p>}
               </div>
             </div>
 
@@ -882,64 +868,89 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-cor`}>Submit APP (PALT + 2 weeks)</Label>
+                <Label htmlFor={`${idPrefix}-contractNumber`}>CGER</Label>
                 <Input
-                  id={`${idPrefix}-cor`}
-                  placeholder="Target date or note"
-                  value={formState.cor}
-                  onChange={(event) => updateFormField("cor", event.target.value)}
+                  id={`${idPrefix}-contractNumber`}
+                  type="date"
+                  value={formState.contractNumber}
+                  onChange={(event) => updateFormField("contractNumber", event.target.value)}
+                  className={fieldErrors.contractNumber ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
                 />
+                {fieldErrors.contractNumber && <p className="text-xs text-rose-600">{fieldErrors.contractNumber}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-co`}>Engagement Meeting</Label>
+                <Label htmlFor={`${idPrefix}-cs`}>SRO</Label>
                 <Input
-                  id={`${idPrefix}-co`}
-                  placeholder="Target date or note"
-                  value={formState.co}
-                  onChange={(event) => updateFormField("co", event.target.value)}
+                  id={`${idPrefix}-cs`}
+                  type="date"
+                  value={formState.cs}
+                  onChange={(event) => updateFormField("cs", event.target.value)}
+                  className={fieldErrors.cs ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
                 />
+                {fieldErrors.cs && <p className="text-xs text-rose-600">{fieldErrors.cs}</p>}
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-cs`}>Submit SRO (APP + 2 weeks)</Label>
+                <Label htmlFor={`${idPrefix}-orderNumber`}>FITARA</Label>
                 <Input
-                  id={`${idPrefix}-cs`}
-                  placeholder="Target date or note"
-                  value={formState.cs}
-                  onChange={(event) => updateFormField("cs", event.target.value)}
+                  id={`${idPrefix}-orderNumber`}
+                  type="date"
+                  value={formState.orderNumber}
+                  onChange={(event) => updateFormField("orderNumber", event.target.value)}
+                  className={fieldErrors.orderNumber ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
                 />
+                {fieldErrors.orderNumber && <p className="text-xs text-rose-600">{fieldErrors.orderNumber}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-contractNumber`}>Submit CGER (SRO + 2 weeks)</Label>
+                <Label htmlFor={`${idPrefix}-nextPeriodOfPerf`}>Acquisition Planning Complete</Label>
                 <Input
-                  id={`${idPrefix}-contractNumber`}
-                  placeholder="Milestone checkpoint"
-                  value={formState.contractNumber}
-                  onChange={(event) => updateFormField("contractNumber", event.target.value)}
+                  id={`${idPrefix}-nextPeriodOfPerf`}
+                  type="date"
+                  value={formState.nextPeriodOfPerf}
+                  onChange={(event) => updateFormField("nextPeriodOfPerf", event.target.value)}
+                  className={fieldErrors.nextPeriodOfPerf ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
                 />
+                {fieldErrors.nextPeriodOfPerf && <p className="text-xs text-rose-600">{fieldErrors.nextPeriodOfPerf}</p>}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor={`${idPrefix}-office`}>Solicitation Issue</Label>
+                <Input
+                  id={`${idPrefix}-office`}
+                  type="date"
+                  value={formState.office}
+                  onChange={(event) => updateFormField("office", event.target.value)}
+                  className={fieldErrors.office ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
+                />
+                {fieldErrors.office && <p className="text-xs text-rose-600">{fieldErrors.office}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`${idPrefix}-ultimateCompletionDate`}>Proposal Received</Label>
+                <Input
+                  id={`${idPrefix}-ultimateCompletionDate`}
+                  type="date"
+                  value={formState.ultimateCompletionDate}
+                  onChange={(event) => updateFormField("ultimateCompletionDate", event.target.value)}
+                  className={fieldErrors.ultimateCompletionDate ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
+                />
+                {fieldErrors.ultimateCompletionDate && <p className="text-xs text-rose-600">{fieldErrors.ultimateCompletionDate}</p>}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-office`}>Notes</Label>
+              <Label htmlFor={`${idPrefix}-paltOitoEngagement`}>Award Complete</Label>
               <Input
-                id={`${idPrefix}-office`}
-                placeholder="Any planning notes or blockers"
-                value={formState.office}
-                onChange={(event) => updateFormField("office", event.target.value)}
+                id={`${idPrefix}-paltOitoEngagement`}
+                type="date"
+                value={formState.paltOitoEngagement}
+                onChange={(event) => updateFormField("paltOitoEngagement", event.target.value)}
+                className={fieldErrors.paltOitoEngagement ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}-orderNumber`}>Reference</Label>
-              <Input
-                id={`${idPrefix}-orderNumber`}
-                placeholder="Reference ID (optional)"
-                value={formState.orderNumber}
-                onChange={(event) => updateFormField("orderNumber", event.target.value)}
-              />
+              {fieldErrors.paltOitoEngagement && <p className="text-xs text-rose-600">{fieldErrors.paltOitoEngagement}</p>}
             </div>
             </div>
           </>
@@ -951,15 +962,6 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 <p className="text-xs text-slate-500">Capture identifiers, people, and schedule dates to keep records complete.</p>
               </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor={`${idPrefix}-cor`}>COR</Label>
-                <Input
-                  id={`${idPrefix}-cor`}
-                  placeholder="COR name"
-                  value={formState.cor}
-                  onChange={(event) => updateFormField("cor", event.target.value)}
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor={`${idPrefix}-contractNumber`}>Contract Number</Label>
                 <Input
@@ -1195,7 +1197,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
             value="legacy"
             className="border border-rose-200 bg-rose-50 text-rose-800 data-[state=active]:border-rose-700 data-[state=active]:bg-rose-300 data-[state=active]:text-rose-950"
           >
-            Legacy Contracts
+            Legacy Contracts (Overview)
           </TabsTrigger>
         </TabsList>
 
@@ -1213,12 +1215,10 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 <ContractsOutlookTable
                   contracts={outlookContracts}
                   showActions
-                  getAssigneeLabel={(contract) => getAssigneeLabel(contract.assigneeIds ?? [], assigneeOptions)}
-                  getAssigneeDetails={(contract) => getAssigneeDetails(contract.assigneeIds ?? [], assigneeOptions)}
+                  getAssigneeLabel={(contract) => getAssigneeLabelForContract(contract, assigneeOptions)}
+                  getAssigneeDetails={(contract) => getAssigneeDetailsForContract(contract, assigneeOptions)}
                   onEdit={(contract) => startEdit(contract, "outlook")}
                   onDelete={handleDelete}
-                  onMove={handleMove}
-                  moveTargets={getMoveTargets("outlook")}
                   isDeleting={isSaving}
                 />
               </CardContent>
@@ -1241,12 +1241,10 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
               <CardContent>
                 <NewAwardsRecompetesTable
                   contracts={recompeteContracts}
-                  getAssigneeLabel={(contract) => getAssigneeLabel(contract.assigneeIds ?? [], assigneeOptions)}
-                  getAssigneeDetails={(contract) => getAssigneeDetails(contract.assigneeIds ?? [], assigneeOptions)}
+                  getAssigneeLabel={(contract) => getAssigneeLabelForContract(contract, assigneeOptions)}
+                  getAssigneeDetails={(contract) => getAssigneeDetailsForContract(contract, assigneeOptions)}
                   onEdit={(contract) => startEdit(contract, "recompetes")}
                   onDelete={handleDelete}
-                  onMove={handleMove}
-                  moveTargets={getMoveTargets("recompetes")}
                   isDeleting={isSaving}
                 />
               </CardContent>
@@ -1259,7 +1257,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
         <TabsContent value="legacy" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Legacy Contracts</CardTitle>
+              <CardTitle>Legacy Contracts (Overview)</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="divide-y divide-slate-200">
@@ -1290,20 +1288,56 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
               <DialogTitle>{selectedContract.contractName}</DialogTitle>
               <DialogDescription>Full contract record (read-only)</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 text-sm sm:grid-cols-2">
-              <p><span className="font-semibold">Assigned To:</span> {getAssigneeLabel(selectedContract.assigneeIds ?? [], assigneeOptions)}</p>
-              <p><span className="font-semibold">COR:</span> {selectedContract.activeContract.cor || "-"}</p>
-              <p><span className="font-semibold">Contract Number:</span> {selectedContract.activeContract.contractNumber || "-"}</p>
-              <p><span className="font-semibold">Office:</span> {selectedContract.activeContract.office || "-"}</p>
-              <p><span className="font-semibold">Next Period of Perf.:</span> {selectedContract.activeContract.nextPeriodOfPerf || "-"}</p>
-              <p><span className="font-semibold">Ultimate Completion Date:</span> {selectedContract.activeContract.ultimateCompletionDate || "-"}</p>
-              <p><span className="font-semibold">Order Number:</span> {selectedContract.activeContract.orderNumber || "-"}</p>
-              <p><span className="font-semibold">CO:</span> {selectedContract.activeContract.co || "-"}</p>
-              <p><span className="font-semibold">CS:</span> {selectedContract.activeContract.cs || "-"}</p>
-            </div>
-            <div className="mt-4 space-y-3 rounded bg-slate-50 p-3 text-xs text-slate-700">
-              <p className="font-semibold">Past Contributor Updates & Important Info</p>
+            {selectedContract.category === RECOMPETES_CATEGORY ? (
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <p><span className="font-semibold">Assigned To:</span> {getAssigneeLabelForContract(selectedContract, assigneeOptions)}</p>
+                <p><span className="font-semibold">Upcoming Procurement:</span> {selectedContract.contractName || "-"}</p>
+                <p><span className="font-semibold">Begin ITOD Engagement:</span> {selectedContract.activeContract.paltBeginOitoEngagement || selectedContract.activeContract.co || "-"}</p>
+                <p><span className="font-semibold">CGER:</span> {selectedContract.activeContract.contractNumber || "-"}</p>
+                <p><span className="font-semibold">SRO:</span> {selectedContract.activeContract.cs || "-"}</p>
+                <p><span className="font-semibold">FITARA:</span> {selectedContract.activeContract.orderNumber || "-"}</p>
+                <p><span className="font-semibold">Acquisition Planning Complete:</span> {selectedContract.activeContract.nextPeriodOfPerf || "-"}</p>
+                <p><span className="font-semibold">Solicitation Issue:</span> {selectedContract.activeContract.office || "-"}</p>
+                <p><span className="font-semibold">Proposal Received:</span> {selectedContract.activeContract.ultimateCompletionDate || "-"}</p>
+                <p><span className="font-semibold">Award Complete:</span> {selectedContract.activeContract.paltOitoEngagement || "-"}</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <p><span className="font-semibold">Assigned To:</span> {getAssigneeLabelForContract(selectedContract, assigneeOptions)}</p>
+                <p><span className="font-semibold">Contract Number:</span> {selectedContract.activeContract.contractNumber || "-"}</p>
+                <p><span className="font-semibold">Office:</span> {selectedContract.activeContract.office || "-"}</p>
+                <p><span className="font-semibold">Next Period of Perf.:</span> {selectedContract.activeContract.nextPeriodOfPerf || "-"}</p>
+                <p><span className="font-semibold">Ultimate Completion Date:</span> {selectedContract.activeContract.ultimateCompletionDate || "-"}</p>
+                <p><span className="font-semibold">Order Number:</span> {selectedContract.activeContract.orderNumber || "-"}</p>
+                <p><span className="font-semibold">CO:</span> {selectedContract.activeContract.co || "-"}</p>
+                <p><span className="font-semibold">CS:</span> {selectedContract.activeContract.cs || "-"}</p>
+              </div>
+            )}
+            <DialogFooter>
+              {selectedContract.category === LEGACY_CATEGORY && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsLegacyHistoryDialogOpen(true)}
+                >
+                  Past Updates & Important Info
+                </Button>
+              )}
+              <Button type="button" onClick={() => setSelectedContract(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
+      <Dialog open={isLegacyHistoryDialogOpen} onOpenChange={setIsLegacyHistoryDialogOpen}>
+        {selectedContract && selectedContract.category === LEGACY_CATEGORY && (
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Past Contributor Updates & Important Info</DialogTitle>
+              <DialogDescription>{selectedContract.contractName}</DialogDescription>
+            </DialogHeader>
+
+            <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1 text-xs text-slate-700">
               {isLoadingLegacyHistory ? (
                 <p>Loading update history...</p>
               ) : legacyHistoryError ? (
@@ -1348,8 +1382,11 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 </div>
               )}
             </div>
+
             <DialogFooter>
-              <Button type="button" onClick={() => setSelectedContract(null)}>Close</Button>
+              <Button type="button" onClick={() => setIsLegacyHistoryDialogOpen(false)}>
+                Close
+              </Button>
             </DialogFooter>
           </DialogContent>
         )}

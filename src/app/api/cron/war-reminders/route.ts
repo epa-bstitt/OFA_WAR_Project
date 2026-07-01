@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendWorkflowEmail } from "@/lib/notifications/email";
-import { getCurrentSubmissionPeriod, isFirstOrThirdTuesday } from "@/lib/submission-periods";
+import { getCurrentSubmissionPeriod, isBiweeklyReminderTime } from "@/lib/submission-periods";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 function shouldSendNow(now: Date): boolean {
-  return isFirstOrThirdTuesday(now) && now.getHours() === 8;
+  return isBiweeklyReminderTime(now);
 }
 
 export async function GET(request: NextRequest) {
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       skipped: true,
-      reason: "Current time is outside the first/third Tuesday 8:00 AM window.",
+      reason: "Current time is outside the biweekly Tuesday 8:00 AM ET window.",
       timestamp: now.toISOString(),
     });
   }

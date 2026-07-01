@@ -34,7 +34,6 @@ interface NewAwardsRecompetesTableProps {
 export function NewAwardsRecompetesTable({
   contracts,
   getAssigneeLabel,
-  getAssigneeDetails,
   onEdit,
   onDelete,
   onMove,
@@ -49,20 +48,21 @@ export function NewAwardsRecompetesTable({
           <TableRow>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Upcoming Procurement</TableHead>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Assigned To</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">Contract End Date</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">PALT Start</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">Submit APP (PALT + 2 weeks)</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">Engagement Meeting</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">Submit SRO (APP + 2 weeks)</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">Submit CGER (SRO + 2 weeks)</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">Notes</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">Begin ITOD Engagement</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">CGER</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">SRO</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">FITARA</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">Acquisition Planning Complete</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">Solicitation Issue</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">Proposal Received</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-slate-50">Award Complete</TableHead>
             <TableHead className="sticky right-0 top-0 z-20 w-[360px] bg-slate-50 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {contracts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="text-sm text-slate-500">
+              <TableCell colSpan={11} className="text-sm text-slate-500">
                 No new awards or recompetes match your current view. Adjust filters or use New Contract to add one.
               </TableCell>
             </TableRow>
@@ -77,40 +77,15 @@ export function NewAwardsRecompetesTable({
                     {contract.contractName}
                   </Link>
                 </TableCell>
-                <TableCell>
-                  {(() => {
-                    const details = getAssigneeDetails?.(contract) || [];
-
-                    if (details.length === 0) {
-                      return (
-                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                          {getAssigneeLabel?.(contract) || "Unassigned"}
-                        </span>
-                      );
-                    }
-
-                    return (
-                      <div className="flex flex-wrap gap-1">
-                        {details.map((assignee, index) => (
-                          <span
-                            key={`${contract.id}-${assignee.email || assignee.name}-${index}`}
-                            title={assignee.email}
-                            className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800"
-                          >
-                            {assignee.name}
-                          </span>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </TableCell>
-                <TableCell>{contract.activeContract.ultimateCompletionDate || "-"}</TableCell>
-                <TableCell>{contract.activeContract.nextPeriodOfPerf || "-"}</TableCell>
-                <TableCell>{contract.activeContract.cor || "-"}</TableCell>
-                <TableCell>{contract.activeContract.co || "-"}</TableCell>
-                <TableCell>{contract.activeContract.cs || "-"}</TableCell>
+                <TableCell>{getAssigneeLabel ? getAssigneeLabel(contract) : "Unassigned"}</TableCell>
+                <TableCell>{contract.activeContract.paltBeginOitoEngagement || contract.activeContract.co || "-"}</TableCell>
                 <TableCell>{contract.activeContract.contractNumber || "-"}</TableCell>
+                <TableCell>{contract.activeContract.cs || "-"}</TableCell>
+                <TableCell>{contract.activeContract.orderNumber || "-"}</TableCell>
+                <TableCell>{contract.activeContract.nextPeriodOfPerf || "-"}</TableCell>
                 <TableCell>{contract.activeContract.office || "-"}</TableCell>
+                <TableCell>{contract.activeContract.ultimateCompletionDate || "-"}</TableCell>
+                <TableCell>{contract.activeContract.paltOitoEngagement || "-"}</TableCell>
                 <TableCell className="sticky right-0 bg-white">
                   <div className="flex items-center justify-end gap-2">
                     <Button type="button" variant="ghost" size="sm" onClick={() => onEdit(contract)}>

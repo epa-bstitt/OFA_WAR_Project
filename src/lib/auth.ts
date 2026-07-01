@@ -132,7 +132,6 @@ const {
 
         return null;
       },
-    }),
     })] : []),
     ...(isLoginGovConfigured
       ? [

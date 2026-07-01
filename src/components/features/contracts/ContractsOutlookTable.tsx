@@ -45,7 +45,7 @@ export function ContractsOutlookTable({
   moveTargets = [],
   isDeleting = false,
 }: ContractsOutlookTableProps) {
-  const emptyColSpan = showActions ? 8 : 7;
+  const emptyColSpan = showActions ? 7 : 6;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -55,7 +55,6 @@ export function ContractsOutlookTable({
           <TableRow>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Contracts</TableHead>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Assigned To</TableHead>
-            <TableHead className="sticky top-0 z-10 bg-slate-50">COR</TableHead>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Contract Number</TableHead>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Office</TableHead>
             <TableHead className="sticky top-0 z-10 bg-slate-50">Next Period of Performance</TableHead>
@@ -108,7 +107,6 @@ export function ContractsOutlookTable({
                   );
                 })()}
               </TableCell>
-              <TableCell>{contract.activeContract.cor || "-"}</TableCell>
               <TableCell>{contract.activeContract.contractNumber || "-"}</TableCell>
               <TableCell>{contract.activeContract.office || "-"}</TableCell>
               <TableCell>{contract.activeContract.nextPeriodOfPerf || "-"}</TableCell>

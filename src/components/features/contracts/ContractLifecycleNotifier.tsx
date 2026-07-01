@@ -27,6 +27,32 @@ function toTimestamp(value: string) {
   return Number.isNaN(parsed) ? Number.NaN : parsed;
 }
 
+function getLifecycleTriggerDate(contract: MockContract) {
+  if (contract.category === RECOMPETES_CATEGORY) {
+    const awardComplete = contract.activeContract.paltOitoEngagement?.trim() ?? "";
+    return awardComplete || null;
+  }
+
+  if (contract.category === OUTLOOK_CATEGORY) {
+    const ultimateCompletionDate = contract.activeContract.ultimateCompletionDate?.trim() ?? "";
+    return ultimateCompletionDate || null;
+  }
+
+  return null;
+}
+
+function getLifecycleTriggerLabel(contract: MockContract) {
+  if (contract.category === RECOMPETES_CATEGORY) {
+    return "Award Complete";
+  }
+
+  if (contract.category === OUTLOOK_CATEGORY) {
+    return "Ultimate Completion Date";
+  }
+
+  return "Trigger Date";
+}
+
 function getDaysRemaining(endDate: string) {
   const endTs = toTimestamp(endDate);
   if (Number.isNaN(endTs)) {
@@ -90,7 +116,11 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
 
     const candidates = lifecycleContracts
       .map((contract) => {
-        const daysRemaining = getDaysRemaining(contract.activeContract.ultimateCompletionDate);
+        const triggerDate = getLifecycleTriggerDate(contract);
+        if (!triggerDate) {
+          return null;
+        }
+        const daysRemaining = getDaysRemaining(triggerDate);
         if (Number.isNaN(daysRemaining) || daysRemaining <= 0 || daysRemaining > 30) {
           return null;
         }
@@ -106,7 +136,7 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
           audience,
           contract.id,
           contract.category,
-          contract.activeContract.ultimateCompletionDate,
+          triggerDate,
           intervalKey,
         ].join(":");
 
@@ -116,6 +146,8 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
 
         return {
           contract,
+          triggerDate,
+          triggerLabel: getLifecycleTriggerLabel(contract),
           daysRemaining,
           transitionLabel,
           storageKey,
@@ -130,8 +162,8 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
 
     const message = candidates
       .map(
-        ({ contract, daysRemaining, transitionLabel }) =>
-          `${contract.contractName}: ${contract.activeContract.ultimateCompletionDate} (${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left) -> moves to ${transitionLabel}`
+        ({ contract, triggerDate, triggerLabel, daysRemaining, transitionLabel }) =>
+          `${contract.contractName}: ${triggerLabel} ${triggerDate} (${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left) -> moves to ${transitionLabel}`
       )
       .join("\n");
 
@@ -162,7 +194,11 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
         return false;
       }
 
-      const endTs = toTimestamp(contract.activeContract.ultimateCompletionDate);
+      const triggerDate = getLifecycleTriggerDate(contract);
+      if (!triggerDate) {
+        return false;
+      }
+      const endTs = toTimestamp(triggerDate);
       return !Number.isNaN(endTs) && endTs <= today.getTime();
     });
 
@@ -196,6 +232,12 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
                 co: contract.activeContract.co,
                 cs: contract.activeContract.cs,
                 orderNumber: contract.activeContract.orderNumber,
+                palt: contract.activeContract.palt ?? "",
+                paltProcurementType: contract.activeContract.paltProcurementType ?? "",
+                paltDollarValue: contract.activeContract.paltDollarValue ?? "",
+                paltBeginOitoEngagement: contract.activeContract.paltBeginOitoEngagement ?? "",
+                paltOitoEngagement: contract.activeContract.paltOitoEngagement ?? "",
+                paltMilestones: contract.activeContract.paltMilestones ?? "",
                 category: targetCategory,
                 assigneeIds: contract.assigneeIds ?? [],
               }),
@@ -210,7 +252,7 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
 
         if (!cancelled) {
           toast.success(
-            `${toMove.length} contract${toMove.length === 1 ? "" : "s"} moved automatically by completion date trigger.`
+            `${toMove.length} contract${toMove.length === 1 ? "" : "s"} moved automatically by lifecycle date trigger.`
           );
           router.refresh();
         }
@@ -219,7 +261,7 @@ export function ContractLifecycleNotifier({ contracts, audience, canAutoMove }: 
           const message =
             error instanceof Error
               ? error.message
-              : "Failed to auto-move contract(s) by completion date trigger.";
+              : "Failed to auto-move contract(s) by lifecycle date trigger.";
           toast.error(message);
         }
       } finally {

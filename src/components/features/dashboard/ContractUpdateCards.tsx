@@ -38,8 +38,9 @@ import {
 } from "@/components/ui/tooltip";
 import { CardGrid } from "@/components/shared/CardGrid";
 import type { ActiveContractDetails, MockContract } from "@/lib/mock-contracts";
+import { MOCK_CONTRACT_ASSIGNEES } from "@/lib/mock-contracts";
 import { cn } from "@/lib/utils";
-import { CircleHelp } from "lucide-react";
+import { CalendarDays, CircleHelp } from "lucide-react";
 import { CardWalkthrough, CardWalkthroughStep } from "./CardWalkthrough";
 import { getCurrentSubmissionPeriod, isSubmissionWindowOpen } from "@/lib/submission-periods";
 
@@ -129,7 +130,7 @@ const PALT_DOLLAR_VALUES_BY_PROCUREMENT: Record<string, string[]> = Object.fromE
 );
 
 const PALT_MILESTONE_LABELS = [
-  "OITO Engagement Ends",
+  "ITOD Engagement Ends",
   "Acquisition Planning Complete",
   "Procurement Package Complete",
   "Solicitation Issued",
@@ -158,7 +159,7 @@ function getPaltMilestoneSequence(contract: ActiveContractDetails) {
 
   if (procurementType === "Simplified Acquisitions Procedures" && dollarValue === "Micropurchase") {
     return [
-      { milestone: "OITO Engagement Ends", days: milestoneDays[0] || "" },
+      { milestone: "ITOD Engagement Ends", days: milestoneDays[0] || "" },
       { milestone: "Acquisition Planning Complete", days: milestoneDays[1] || "" },
       { milestone: "Procurement Package Complete", days: milestoneDays[2] || "" },
       { milestone: "Solicitation Issued", days: milestoneDays[3] || "" },
@@ -195,6 +196,48 @@ function addDaysToIsoDate(dateValue: string, daysValue: string) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function openDatePickerById(inputId: string) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const input = document.getElementById(inputId) as (HTMLInputElement & { showPicker?: () => void }) | null;
+  if (!input || input.disabled) {
+    return;
+  }
+
+  if (typeof input.showPicker === "function") {
+    input.showPicker();
+    return;
+  }
+
+  input.focus();
+}
+
+function toDateInputValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const slashDateMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDateMatch) {
+    const [, month, day, year] = slashDateMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
 function applyCalculatedPaltDueDates(rows: PaltMilestoneRow[], startIndex = 1): PaltMilestoneRow[] {
   if (rows.length === 0) {
     return rows;
@@ -214,7 +257,7 @@ function applyCalculatedPaltDueDates(rows: PaltMilestoneRow[], startIndex = 1): 
 function buildPaltMilestones(contract: ActiveContractDetails) {
   const milestoneSequence = getPaltMilestoneSequence(contract);
   const defaults = applyCalculatedPaltDueDates([
-    { id: 0, milestone: "Begin OITO Engagement", dueDate: contract.paltBeginOitoEngagement || "", days: "90" },
+    { id: 0, milestone: "Begin ITOD Engagement", dueDate: contract.paltBeginOitoEngagement || "", days: "90" },
     ...milestoneSequence.map(({ milestone, days }, index) => ({
       id: index + 1,
       milestone,
@@ -327,6 +370,27 @@ function getCurrentTableLabel(category: string) {
   }
 
   return OUTLOOK_CATEGORY;
+}
+
+function getAssignedToLabel(contract: MockContract | null) {
+  if (!contract || !contract.assigneeIds || contract.assigneeIds.length === 0) {
+    return "Unassigned";
+  }
+
+  const contractAssigneeMap = new Map(
+    (contract.assignees ?? []).map((assignee) => [assignee.id, assignee])
+  );
+
+  const names = contract.assigneeIds
+    .map(
+      (assigneeId) =>
+        contractAssigneeMap.get(assigneeId)?.name ||
+        MOCK_CONTRACT_ASSIGNEES[assigneeId]?.name ||
+        assigneeId
+    )
+    .filter((name) => name.trim().length > 0);
+
+  return names.length > 0 ? names.join(", ") : "Unassigned";
 }
 
 const statusStyles: Record<LineItemStatus | "NORMAL" | "RISK" | "CRITICAL", string> = {
@@ -1675,7 +1739,7 @@ export function ContractUpdateCards({
                       : draft.submitted
                       ? "Submitted cards are locked until Edit is selected."
                       : !submissionWindowOpen && !draft.reopenedAfterDeadline && !draft.reviewSubmissionId
-                        ? "Submissions are only open on the 1st and 3rd Tuesday from 8:00 AM to 5:00 PM unless reopened by reviewer comment."
+                        ? "Submissions are only open every other Tuesday from 8:00 AM to 5:00 PM unless reopened by reviewer comment."
                       : isEnhancedModeEnabled
                         ? draft.submissionMode === "SIMPLE"
                           ? "Simple mode keeps the submission lightweight with a single text field and severity tag."
@@ -1879,26 +1943,24 @@ export function ContractUpdateCards({
                 <>
                   {(() => {
                     const isOnTable = visibleContracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "New Awards and Recompetes");
+                    const selectedContractForDetails = visibleContracts.find((contract) => contract.id === selectedActiveContractId) ?? null;
+                    const assignedToLabel = getAssignedToLabel(selectedContractForDetails);
                     const isLocked = userRole === "contributor" && !isOnTable;
-                    const labels: Record<string, string> = {
-                      contractName: "Upcoming Procurement",
-                      cor: "COR",
-                      contractNumber: "Contract Number",
-                      office: "Office",
-                      nextPeriodOfPerf: "Next Period of Perf.",
-                      ultimateCompletionDate: "Contract End Date",
-                      co: "CO",
-                      cs: "CS",
-                      orderNumber: "Order Number",
-                      paltProcurementType: "PALT Procurement Type",
-                      paltDollarValue: "PALT Dollar Value",
-                      paltBeginOitoEngagement: "Begin OITO Engagement",
-                      paltOitoEngagement: "OITO Engagement",
-                      paltMilestones: "PALT Milestones",
-                      solicitationNumber: "Solicitation Number",
-                      anticipatedAwardDate: "Anticipated Award Date",
-                      notes: "Notes"
-                    };
+                    const recompeteFields: Array<{
+                      key: keyof ActiveContractDetails;
+                      label: string;
+                      inputType: "text" | "date";
+                    }> = [
+                      { key: "contractName", label: "Upcoming Procurement", inputType: "text" },
+                      { key: "paltBeginOitoEngagement", label: "Begin ITOD Engagement", inputType: "date" },
+                      { key: "contractNumber", label: "CGER", inputType: "date" },
+                      { key: "cs", label: "SRO", inputType: "date" },
+                      { key: "orderNumber", label: "FITARA", inputType: "date" },
+                      { key: "nextPeriodOfPerf", label: "Acquisition Planning Complete", inputType: "date" },
+                      { key: "office", label: "Solicitation Issue", inputType: "date" },
+                      { key: "ultimateCompletionDate", label: "Proposal Received", inputType: "date" },
+                      { key: "paltOitoEngagement", label: "Award Complete", inputType: "date" },
+                    ];
                     return (
                       <>
                         {isLocked && (
@@ -1906,34 +1968,48 @@ export function ContractUpdateCards({
                             <span role="img" aria-label="locked">🔒</span> This contract is not editable in this view.
                           </div>
                         )}
-                        {Object.entries(selectedActiveContract).map(([key, value]) => {
-                          if (
-                            [
-                              "id",
-                              "categorySwitch",
-                              "palt",
-                              "paltProcurementType",
-                              "paltDollarValue",
-                              "paltBeginOitoEngagement",
-                              "paltOitoEngagement",
-                              "paltMilestones",
-                            ].includes(key)
-                          ) return null;
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-slate-500">Assigned To</p>
+                          <Input
+                            value={assignedToLabel}
+                            disabled
+                            className="bg-slate-100 text-slate-400 cursor-not-allowed"
+                          />
+                        </div>
+                        {recompeteFields.map(({ key, label, inputType }) => {
+                          const value = selectedActiveContract[key] || "";
+                          const inputId = `recompete-${selectedActiveContractId}-${String(key)}`;
                           return (
                             <div className="space-y-2" key={key}>
-                              <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
-                              <Input
-                                value={value || ""}
-                                onChange={event =>
-                                  updateActiveContractField(
-                                    selectedActiveContractId,
-                                    key as keyof ActiveContractDetails,
-                                    event.target.value
-                                  )
-                                }
-                                disabled={isLocked}
-                                className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
-                              />
+                              <p className="text-xs font-medium text-slate-500">{label}</p>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  id={inputId}
+                                  type={inputType}
+                                  value={value || ""}
+                                  onChange={event =>
+                                    updateActiveContractField(
+                                      selectedActiveContractId,
+                                      key as keyof ActiveContractDetails,
+                                      event.target.value
+                                    )
+                                  }
+                                  disabled={isLocked}
+                                  className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
+                                />
+                                {inputType === "date" && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => openDatePickerById(inputId)}
+                                    disabled={isLocked}
+                                    aria-label={`Open calendar for ${label}`}
+                                  >
+                                    <CalendarDays className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
@@ -1945,10 +2021,11 @@ export function ContractUpdateCards({
                 <>
                   {(() => {
                     const isOnTable = visibleContracts.some(c => c.id === selectedActiveContractId && getCurrentTableLabel(c.category) === "Current and Active Contracts/Purchase Order Outlook");
+                    const selectedContractForDetails = visibleContracts.find((contract) => contract.id === selectedActiveContractId) ?? null;
+                    const assignedToLabel = getAssignedToLabel(selectedContractForDetails);
                     const isLocked = userRole === "contributor" && !isOnTable;
                     const labels: Record<string, string> = {
                       contractName: "Contract Name",
-                      cor: "COR",
                       contractNumber: "Contract Number",
                       office: "Office",
                       nextPeriodOfPerf: "Next Period of Perf.",
@@ -1958,13 +2035,14 @@ export function ContractUpdateCards({
                       orderNumber: "Order Number",
                       paltProcurementType: "PALT Procurement Type",
                       paltDollarValue: "PALT Dollar Value",
-                      paltBeginOitoEngagement: "Begin OITO Engagement",
-                      paltOitoEngagement: "OITO Engagement",
+                      paltBeginOitoEngagement: "Begin ITOD Engagement",
+                      paltOitoEngagement: "ITOD Engagement",
                       paltMilestones: "PALT Milestones",
                       solicitationNumber: "Solicitation Number",
                       anticipatedAwardDate: "Anticipated Award Date",
                       notes: "Notes"
                     };
+                    const currentActiveDateFields = new Set(["nextPeriodOfPerf", "ultimateCompletionDate"]);
                     return (
                       <>
                         {isLocked && (
@@ -1972,10 +2050,19 @@ export function ContractUpdateCards({
                             <span role="img" aria-label="locked">🔒</span> This contract is not editable in this view.
                           </div>
                         )}
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-slate-500">Assigned To</p>
+                          <Input
+                            value={assignedToLabel}
+                            disabled
+                            className="bg-slate-100 text-slate-400 cursor-not-allowed"
+                          />
+                        </div>
                         {Object.entries(selectedActiveContract).map(([key, value]) => {
                           if (
                             [
                               "id",
+                              "cor",
                               "categorySwitch",
                               "palt",
                               "paltProcurementType",
@@ -1985,21 +2072,41 @@ export function ContractUpdateCards({
                               "paltMilestones",
                             ].includes(key)
                           ) return null;
+
+                          const isDateField = currentActiveDateFields.has(key);
+                          const inputId = `current-active-${selectedActiveContractId}-${key}`;
+
                           return (
                             <div className="space-y-2" key={key}>
                               <p className="text-xs font-medium text-slate-500">{labels[key] || key}</p>
-                              <Input
-                                value={value || ""}
-                                onChange={event =>
-                                  updateActiveContractField(
-                                    selectedActiveContractId,
-                                    key as keyof ActiveContractDetails,
-                                    event.target.value
-                                  )
-                                }
-                                disabled={isLocked}
-                                className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
-                              />
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  id={inputId}
+                                  type={isDateField ? "date" : "text"}
+                                  value={isDateField ? toDateInputValue(String(value || "")) : value || ""}
+                                  onChange={event =>
+                                    updateActiveContractField(
+                                      selectedActiveContractId,
+                                      key as keyof ActiveContractDetails,
+                                      event.target.value
+                                    )
+                                  }
+                                  disabled={isLocked}
+                                  className={isLocked ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""}
+                                />
+                                {isDateField && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => openDatePickerById(inputId)}
+                                    disabled={isLocked}
+                                    aria-label={`Open calendar for ${labels[key] || key}`}
+                                  >
+                                    <CalendarDays className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           );
                         })}

@@ -8,7 +8,6 @@ import {
   type MockContract,
   type MockContractSubmission,
 } from "@/lib/mock-contracts";
-import { getCurrentBiWeek, getBiWeekDate } from "@/lib/date-utils";
 
 interface ContractMetadata {
   category?: string;
@@ -300,83 +299,6 @@ async function seedIfEmpty() {
 
 async function ensureDemoContributorData() {
   await ensureUserRecord(DEMO_CONTRIBUTOR_ID, DEMO_CONTRIBUTOR_NAME, DEMO_CONTRIBUTOR_EMAIL);
-
-  const projects = await prisma.project.findMany({
-    where: {
-      status: { not: "COMPLETED" },
-    },
-    orderBy: {
-      name: "asc",
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-    take: 3,
-  });
-
-  if (projects.length === 0) {
-    return;
-  }
-
-  for (const [index, project] of projects.entries()) {
-    const existingAssignment = await prisma.projectAssignment.findFirst({
-      where: {
-        projectId: project.id,
-        userId: DEMO_CONTRIBUTOR_ID,
-        componentId: null,
-      },
-      select: { id: true },
-    });
-
-    if (!existingAssignment) {
-      await prisma.projectAssignment.create({
-        data: {
-          userId: DEMO_CONTRIBUTOR_ID,
-          projectId: project.id,
-          componentId: null,
-        },
-      });
-    }
-
-    const existingUserWarCount = await prisma.submission.count({
-      where: {
-        userId: DEMO_CONTRIBUTOR_ID,
-        projectId: project.id,
-        deletedAt: null,
-      },
-    });
-
-    if (existingUserWarCount > 0) {
-      continue;
-    }
-
-    const currentYear = new Date().getFullYear();
-    const biWeek = getCurrentBiWeek();
-    const mostRecentWeek = getBiWeekDate(Math.max(1, biWeek), currentYear);
-    const previousWeek = getBiWeekDate(Math.max(1, biWeek - 1), currentYear);
-
-    await prisma.submission.createMany({
-      data: [
-        {
-          userId: DEMO_CONTRIBUTOR_ID,
-          projectId: project.id,
-          weekOf: previousWeek,
-          rawText: `Status update for ${project.name}: requirements review and milestone planning completed.`,
-          status: "IN_REVIEW",
-          isAiGenerated: false,
-        },
-        {
-          userId: DEMO_CONTRIBUTOR_ID,
-          projectId: project.id,
-          weekOf: mostRecentWeek,
-          rawText: `WAR update for ${project.name}: draft deliverables submitted and awaiting Program Overseer review.`,
-          status: index % 2 === 0 ? "SUBMITTED" : "IN_REVIEW",
-          isAiGenerated: false,
-        },
-      ],
-    });
-  }
 }
 
 async function fetchContracts() {
@@ -397,6 +319,12 @@ async function fetchContracts() {
         },
         select: {
           userId: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
         },
       },
       submissions: {
@@ -443,6 +371,11 @@ async function fetchContracts() {
       id: project.id,
       category: metadata.category,
       assigneeIds: project.assignments.map((assignment) => assignment.userId),
+      assignees: project.assignments.map((assignment) => ({
+        id: assignment.userId,
+        name: assignment.user?.name?.trim() || assignment.userId,
+        email: assignment.user?.email?.trim() || "",
+      })),
       contractName: project.name,
       imageUrl: metadata.imageUrl,
       imageAlt: metadata.imageAlt,
@@ -770,7 +703,7 @@ export async function upsertWarSubmissionForContract(params: {
   if (!submission) {
     if (!submissionWindowOpen && !deadlineOverrideEnabled) {
       throw new Error(
-        "SUBMISSION_LOCKED:Submissions are only allowed on the 1st and 3rd Tuesday between 8:00 AM and 5:00 PM."
+        "SUBMISSION_LOCKED:Submissions are only allowed every other Tuesday between 8:00 AM and 5:00 PM."
       );
     }
 
