@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/db";
 import { logAuditEvent } from "@/lib/audit/logger";
+import { buildContributorEmail, normalizeContributorName } from "@/lib/contributor-profile";
 
 export const runtime = "nodejs";
 
@@ -145,15 +146,16 @@ async function parseZipArchive(zipBuffer: Buffer): Promise<ParsedImportDoc[]> {
 }
 
 async function upsertImportedUser(name: string) {
-  const slug = toSlug(name);
+  const normalizedName = normalizeContributorName(name);
+  const slug = toSlug(normalizedName || name);
   const safeSlug = slug || `import-user-${createHash("sha1").update(name).digest("hex").slice(0, 8)}`;
   const userId = `import-${safeSlug}`;
-  const email = `${safeSlug}@import.local`;
+  const email = buildContributorEmail(normalizedName || name, safeSlug);
 
   await prisma.user.upsert({
     where: { id: userId },
     update: {
-      name,
+      name: normalizedName || name,
       email,
       azureAdId: userId,
       role: "CONTRIBUTOR",
@@ -161,7 +163,7 @@ async function upsertImportedUser(name: string) {
     },
     create: {
       id: userId,
-      name,
+      name: normalizedName || name,
       email,
       azureAdId: userId,
       role: "CONTRIBUTOR",

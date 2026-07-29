@@ -84,13 +84,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    updated = await updateContractPaltTrackingInDb(params.id, {
-      palt: String(body?.palt ?? ""),
-      paltProcurementType: String(body?.paltProcurementType ?? ""),
-      paltDollarValue: String(body?.paltDollarValue ?? ""),
-      paltBeginOitoEngagement: String(body?.paltBeginOitoEngagement ?? ""),
-      paltOitoEngagement: String(body?.paltOitoEngagement ?? ""),
-      paltMilestones: String(body?.paltMilestones ?? ""),
+    const existingContract = await getContractByIdFromDb(params.id);
+    if (!existingContract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+
+    updated = await updateContractInDb(params.id, {
+      contractName: String(body?.contractName ?? existingContract.contractName).trim(),
+      cor: String(body?.cor ?? existingContract.activeContract.cor ?? ""),
+      contractNumber: String(body?.contractNumber ?? existingContract.activeContract.contractNumber ?? ""),
+      office: String(body?.office ?? existingContract.activeContract.office ?? ""),
+      nextPeriodOfPerf: String(body?.nextPeriodOfPerf ?? existingContract.activeContract.nextPeriodOfPerf ?? ""),
+      ultimateCompletionDate: String(body?.ultimateCompletionDate ?? existingContract.activeContract.ultimateCompletionDate ?? ""),
+      co: String(body?.co ?? existingContract.activeContract.co ?? ""),
+      cs: String(body?.cs ?? existingContract.activeContract.cs ?? ""),
+      orderNumber: String(body?.orderNumber ?? existingContract.activeContract.orderNumber ?? ""),
+      palt: String(body?.palt ?? existingContract.activeContract.palt ?? ""),
+      paltProcurementType: String(body?.paltProcurementType ?? existingContract.activeContract.paltProcurementType ?? ""),
+      paltDollarValue: String(body?.paltDollarValue ?? existingContract.activeContract.paltDollarValue ?? ""),
+      paltBeginOitoEngagement: String(body?.paltBeginOitoEngagement ?? existingContract.activeContract.paltBeginOitoEngagement ?? ""),
+      paltOitoEngagement: String(body?.paltOitoEngagement ?? existingContract.activeContract.paltOitoEngagement ?? ""),
+      paltMilestones: String(body?.paltMilestones ?? existingContract.activeContract.paltMilestones ?? ""),
+      category: existingContract.category,
+      assigneeIds: existingContract.assigneeIds,
     });
   } else {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

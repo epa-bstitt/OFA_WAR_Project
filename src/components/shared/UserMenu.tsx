@@ -34,7 +34,7 @@ const roleLabels: Record<string, string> = {
 const demoUsers: Record<string, { name: string; email: string; role: string }> = {
   contributor: {
     name: "Demo Contributor",
-    email: "contributor@demo.epa.gov",
+    email: "demo.contributor@epa.gov",
     role: "CONTRIBUTOR",
   },
   aggregator: {

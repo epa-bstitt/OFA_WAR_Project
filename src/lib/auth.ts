@@ -65,7 +65,7 @@ const demoUsers: Record<string, { id: string; name: string; email: string; role:
   contributor: {
     id: "demo-contributor",
     name: "Demo Contributor",
-    email: "contributor@demo.epa.gov",
+    email: "demo.contributor@epa.gov",
     role: "CONTRIBUTOR",
   },
   aggregator: {

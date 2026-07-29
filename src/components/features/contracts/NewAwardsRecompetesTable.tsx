@@ -34,6 +34,7 @@ interface NewAwardsRecompetesTableProps {
 export function NewAwardsRecompetesTable({
   contracts,
   getAssigneeLabel,
+  getAssigneeDetails,
   onEdit,
   onDelete,
   onMove,
@@ -77,7 +78,33 @@ export function NewAwardsRecompetesTable({
                     {contract.contractName}
                   </Link>
                 </TableCell>
-                <TableCell>{getAssigneeLabel ? getAssigneeLabel(contract) : "Unassigned"}</TableCell>
+                <TableCell>
+                  {(() => {
+                    const details = getAssigneeDetails?.(contract) || [];
+
+                    if (details.length === 0) {
+                      return (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          {getAssigneeLabel ? getAssigneeLabel(contract) : "Unassigned"}
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <div className="flex flex-wrap gap-1">
+                        {details.map((assignee, index) => (
+                          <span
+                            key={`${contract.id}-${assignee.email || assignee.name}-${index}`}
+                            title={assignee.email}
+                            className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800"
+                          >
+                            {assignee.name}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </TableCell>
                 <TableCell>{contract.activeContract.paltBeginOitoEngagement || contract.activeContract.co || "-"}</TableCell>
                 <TableCell>{contract.activeContract.contractNumber || "-"}</TableCell>
                 <TableCell>{contract.activeContract.cs || "-"}</TableCell>

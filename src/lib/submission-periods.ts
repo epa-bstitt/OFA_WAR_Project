@@ -108,6 +108,19 @@ function getDeadlineByOffset(offset: number): Date {
   );
 }
 
+function getWindowOpenByOffset(offset: number): Date {
+  const etDate = getEtDateByOffset(offset);
+  return zonedDateTimeToUtc(
+    etDate.year,
+    etDate.month,
+    etDate.day,
+    8,
+    0,
+    0,
+    SUBMISSION_TIME_ZONE
+  );
+}
+
 function getPeriodIdByOffset(offset: number): string {
   const etDate = getEtDateByOffset(offset);
   const month = String(etDate.month).padStart(2, "0");
@@ -128,8 +141,14 @@ function getPeriodLabel(deadline: Date): string {
 
 function getCurrentPeriodOffset(now: Date): number {
   const baseOffset = getBiweeklyOffsetForDate(now);
-  const baseDeadline = getDeadlineByOffset(baseOffset);
-  return now.getTime() <= baseDeadline.getTime() ? baseOffset : baseOffset + 1;
+  const baseWindowOpen = getWindowOpenByOffset(baseOffset);
+  const nextWindowOpen = getWindowOpenByOffset(baseOffset + 1);
+
+  if (now.getTime() < baseWindowOpen.getTime()) {
+    return baseOffset - 1;
+  }
+
+  return now.getTime() < nextWindowOpen.getTime() ? baseOffset : baseOffset + 1;
 }
 
 function buildPeriodForOffset(offset: number): SubmissionPeriod {

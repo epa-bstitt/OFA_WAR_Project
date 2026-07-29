@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { ChevronDown, Plus, XCircle } from "lucide-react";
+import { Calendar, ChevronDown, Plus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { MOCK_CONTRACT_ASSIGNEES, type MockContract, type MockContractSubmission } from "@/lib/mock-contracts";
 import { Button } from "@/components/ui/button";
@@ -110,6 +110,16 @@ function getAssigneeLabelForContract(contract: MockContract, assigneeOptions: As
   return labels.length > 0 ? labels.join(", ") : "Unassigned";
 }
 
+function openDatePicker(inputId: string) {
+  const input = document.getElementById(inputId) as HTMLInputElement | null;
+  if (!input) {
+    return;
+  }
+
+  input.focus();
+  input.showPicker?.();
+}
+
 function getAssigneeDetailsForContract(contract: MockContract, assigneeOptions: AssigneeOption[]) {
   const contractAssigneeMap = new Map(
     (contract.assignees ?? []).map((assignee) => [assignee.id, assignee])
@@ -148,6 +158,30 @@ function toTimestamp(value: string) {
   return Number.isNaN(parsed) ? Number.NaN : parsed;
 }
 
+function toDateInputValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const slashDateMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDateMatch) {
+    const [, month, day, year] = slashDateMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return trimmed;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
 const EMPTY_FORM: ContractFormState = {
   contractName: "",
   category: OUTLOOK_CATEGORY,
@@ -164,19 +198,29 @@ const EMPTY_FORM: ContractFormState = {
 };
 
 function toFormState(contract: MockContract): ContractFormState {
+  const isRecompeteContract = contract.category === RECOMPETES_CATEGORY;
+
   return {
     contractName: contract.contractName,
     category: contract.category,
     cor: contract.activeContract.cor,
-    contractNumber: contract.activeContract.contractNumber,
-    office: contract.activeContract.office,
-    nextPeriodOfPerf: contract.activeContract.nextPeriodOfPerf,
-    ultimateCompletionDate: contract.activeContract.ultimateCompletionDate,
+    contractNumber: isRecompeteContract
+      ? toDateInputValue(contract.activeContract.contractNumber)
+      : contract.activeContract.contractNumber,
+    office: isRecompeteContract
+      ? toDateInputValue(contract.activeContract.office)
+      : contract.activeContract.office,
+    nextPeriodOfPerf: toDateInputValue(contract.activeContract.nextPeriodOfPerf),
+    ultimateCompletionDate: toDateInputValue(contract.activeContract.ultimateCompletionDate),
     co: contract.activeContract.co,
-    cs: contract.activeContract.cs,
-    orderNumber: contract.activeContract.orderNumber,
-    paltBeginOitoEngagement: contract.activeContract.paltBeginOitoEngagement ?? "",
-    paltOitoEngagement: contract.activeContract.paltOitoEngagement ?? "",
+    cs: isRecompeteContract
+      ? toDateInputValue(contract.activeContract.cs)
+      : contract.activeContract.cs,
+    orderNumber: isRecompeteContract
+      ? toDateInputValue(contract.activeContract.orderNumber)
+      : contract.activeContract.orderNumber,
+    paltBeginOitoEngagement: toDateInputValue(contract.activeContract.paltBeginOitoEngagement ?? ""),
+    paltOitoEngagement: toDateInputValue(contract.activeContract.paltOitoEngagement ?? ""),
   };
 }
 
@@ -985,13 +1029,23 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
               </div>
               <div className="space-y-2">
                 <Label htmlFor={`${idPrefix}-nextPeriodOfPerf`}>Next Period of Perf.</Label>
-                <Input
-                  id={`${idPrefix}-nextPeriodOfPerf`}
-                  placeholder="YYYY-MM-DD"
-                  value={formState.nextPeriodOfPerf}
-                  onChange={(event) => updateFormField("nextPeriodOfPerf", event.target.value)}
-                  className={fieldErrors.nextPeriodOfPerf ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
-                />
+                <div className="relative">
+                  <Input
+                    id={`${idPrefix}-nextPeriodOfPerf`}
+                    type="date"
+                    value={formState.nextPeriodOfPerf}
+                    onChange={(event) => updateFormField("nextPeriodOfPerf", event.target.value)}
+                    className={fieldErrors.nextPeriodOfPerf ? "border-rose-400 pr-10 focus-visible:ring-rose-500" : "pr-10"}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Open Next Period of Performance calendar"
+                    onClick={() => openDatePicker(`${idPrefix}-nextPeriodOfPerf`)}
+                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 transition hover:text-slate-700"
+                  >
+                    <Calendar className="h-4 w-4" />
+                  </button>
+                </div>
                 {fieldErrors.nextPeriodOfPerf && <p className="text-xs text-rose-600">{fieldErrors.nextPeriodOfPerf}</p>}
               </div>
             </div>
@@ -999,13 +1053,23 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor={`${idPrefix}-ultimateCompletionDate`}>Ultimate Completion Date</Label>
-                <Input
-                  id={`${idPrefix}-ultimateCompletionDate`}
-                  placeholder="YYYY-MM-DD"
-                  value={formState.ultimateCompletionDate}
-                  onChange={(event) => updateFormField("ultimateCompletionDate", event.target.value)}
-                  className={fieldErrors.ultimateCompletionDate ? "border-rose-400 focus-visible:ring-rose-500" : undefined}
-                />
+                <div className="relative">
+                  <Input
+                    id={`${idPrefix}-ultimateCompletionDate`}
+                    type="date"
+                    value={formState.ultimateCompletionDate}
+                    onChange={(event) => updateFormField("ultimateCompletionDate", event.target.value)}
+                    className={fieldErrors.ultimateCompletionDate ? "border-rose-400 pr-10 focus-visible:ring-rose-500" : "pr-10"}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Open Ultimate Completion Date calendar"
+                    onClick={() => openDatePicker(`${idPrefix}-ultimateCompletionDate`)}
+                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500 transition hover:text-slate-700"
+                  >
+                    <Calendar className="h-4 w-4" />
+                  </button>
+                </div>
                 {fieldErrors.ultimateCompletionDate && <p className="text-xs text-rose-600">{fieldErrors.ultimateCompletionDate}</p>}
               </div>
               <div className="space-y-2">

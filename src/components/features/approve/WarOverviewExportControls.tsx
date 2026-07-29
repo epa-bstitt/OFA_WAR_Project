@@ -183,7 +183,7 @@ export function WarOverviewExportControls({ contracts, currentPeriodId }: WarOve
         <DialogHeader>
           <DialogTitle>Export WAR Overview</DialogTitle>
           <DialogDescription>
-            Choose which table sections and contracts to include in the editable Word export for the current bi-weekly period.
+            Choose which table sections and contracts to include in the editable .docx export for the current bi-weekly period.
           </DialogDescription>
         </DialogHeader>
 
@@ -284,7 +284,7 @@ export function WarOverviewExportControls({ contracts, currentPeriodId }: WarOve
             disabled={selectedContractIds.length === 0 || !Object.values(includeSections).some(Boolean)}
           >
             <Download className="mr-1.5 h-4 w-4" />
-            Download Word Export
+            Download Word (.docx) Export
           </Button>
         </DialogFooter>
       </DialogContent>

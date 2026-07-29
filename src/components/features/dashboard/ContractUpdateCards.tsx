@@ -432,7 +432,16 @@ export function ContractUpdateCards({
         : contracts,
     [contracts, userRole]
   );
-  const referenceNow = useMemo(() => new Date(), []);
+  const [referenceNow, setReferenceNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setReferenceNow(new Date());
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
   const submissionWindowOpen = useMemo(
     () => isSubmissionWindowOpen(referenceNow),
     [referenceNow]
@@ -486,7 +495,13 @@ export function ContractUpdateCards({
           ];
         })
       ),
-    [visibleContracts, currentPeriod.id, schedulingOverrideActive, submissionWindowOpen]
+    [
+      visibleContracts,
+      currentPeriod.start,
+      currentPeriod.end,
+      schedulingOverrideActive,
+      submissionWindowOpen,
+    ]
   );
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(initialDrafts);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);

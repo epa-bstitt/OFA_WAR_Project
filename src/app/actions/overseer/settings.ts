@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { logAuditEvent, logAuditEvents } from "@/lib/audit/logger";
 import { getStoredSettings, setStoredSettings } from "@/app/api/admin/settings/store";
+import { buildContributorEmail, normalizeContributorName } from "@/lib/contributor-profile";
 import {
   type AggregatorAccessSettings,
   type ContributorAccessSettings,
@@ -270,8 +271,8 @@ export async function addContributorUser(input: {
   try {
     const currentUser = await requireOverseerAccess();
 
-    const name = input.name.trim();
-    const email = input.email.trim().toLowerCase();
+    const name = normalizeContributorName(input.name);
+    const email = buildContributorEmail(name || input.name, input.name);
 
     if (!name || !email) {
       return { success: false, error: "Name and email are required" };

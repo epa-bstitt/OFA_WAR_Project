@@ -37,28 +37,13 @@ import {
   type Project,
   type ProjectAssignment,
 } from "@/app/actions/admin/projects";
+import { buildContributorEmail } from "@/lib/contributor-profile";
 
 interface OverseerSettingsManagerProps {
   initialContributorAccess: ContributorAccessSettings;
   initialAggregatorAccess: AggregatorAccessSettings;
   initialContributors: ManagedContributor[];
   initialProjects: Project[];
-}
-
-function buildContributorEmail(name: string) {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .map((part) => part.toLowerCase().replace(/[^a-z]/g, ""))
-    .filter(Boolean);
-
-  if (parts.length < 2) {
-    return "";
-  }
-
-  const firstName = parts[0];
-  const lastName = parts[parts.length - 1];
-  return `${lastName}.${firstName}@epa.gov`;
 }
 
 export function OverseerSettingsManager({
@@ -676,11 +661,11 @@ export function OverseerSettingsManager({
                 id="new-contributor-email"
                 type="email"
                 value={newContributorEmail}
-                onChange={(event) => setNewContributorEmail(event.target.value)}
+                readOnly
                 placeholder="smith.jordan@epa.gov"
               />
               <p className="text-xs text-slate-500">
-                Auto-generated from first and last name using the EPA format.
+                Auto-generated from the contributor name using the EPA format.
               </p>
             </div>
           </div>

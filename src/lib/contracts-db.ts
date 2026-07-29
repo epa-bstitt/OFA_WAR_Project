@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import { getCurrentSubmissionPeriod, isSubmissionWindowOpen } from "@/lib/submission-periods";
 import { getStoredSettings } from "@/app/api/admin/settings/store";
 import { getOverseerSettings } from "@/lib/overseer-settings";
+import {
+  buildContributorEmail,
+  isPlaceholderContributorEmail,
+  isPlaceholderContributorName,
+  normalizeContributorName,
+} from "@/lib/contributor-profile";
 import {
   getContractsOutlook as getMockContractsOutlook,
   type ContractFormInput,
@@ -38,8 +45,8 @@ const DEFAULT_IMAGE_URL =
 const DEFAULT_IMAGE_ALT = "Contract and acquisition planning documents on an office desk.";
 const DEFAULT_CATEGORY = "Current and Active Contracts/Purchase Order Outlook";
 const DEMO_CONTRIBUTOR_ID = "demo-contributor";
-const DEMO_CONTRIBUTOR_EMAIL = "contributor@demo.epa.gov";
 const DEMO_CONTRIBUTOR_NAME = "Contributor";
+const DEMO_CONTRIBUTOR_EMAIL = buildContributorEmail(DEMO_CONTRIBUTOR_NAME, DEMO_CONTRIBUTOR_ID);
 
 function toIsoDate(value: Date) {
   return value.toISOString().slice(0, 10);
@@ -195,9 +202,13 @@ function collapseToLatestBiWeeklySubmission<
   return collapsed;
 }
 
-function parseLatestFeedback(submission: {
+function parseLatestFeedback(submission?: {
   reviews?: Array<{ status: string; comment: string | null; createdAt: Date }>;
 }) {
+  if (!submission) {
+    return null;
+  }
+
   const latestReview = submission.reviews?.[0];
   if (!latestReview?.comment?.trim()) {
     return null;
@@ -216,21 +227,38 @@ async function ensureUserRecord(userId: string, name?: string | null, email?: st
     return;
   }
 
-  const userEmail = email?.trim() || `${normalizedId}@demo.epa.gov`;
+  const existing = await prisma.user.findUnique({
+    where: { id: normalizedId },
+    select: { name: true, email: true },
+  });
+
+  const providedName = name?.trim() || "";
+  const normalizedProvidedName = providedName ? normalizeContributorName(providedName) : "";
+  const normalizedIdName = normalizeContributorName(normalizedId);
+  const nextName = !isPlaceholderContributorName(existing?.name, normalizedId)
+    ? existing?.name?.trim() || normalizedIdName
+    : normalizedProvidedName || normalizedIdName;
+
+  const providedEmail = email?.trim().toLowerCase() || "";
+  const nextEmail = !isPlaceholderContributorEmail(existing?.email)
+    ? existing?.email?.trim().toLowerCase() || buildContributorEmail(nextName, normalizedId)
+    : (providedEmail && !isPlaceholderContributorEmail(providedEmail)
+        ? providedEmail
+        : buildContributorEmail(nextName, normalizedId));
 
   await prisma.user.upsert({
     where: { id: normalizedId },
     update: {
-      email: userEmail,
-      name: name ?? undefined,
+      email: nextEmail,
+      name: nextName,
       azureAdId: normalizedId,
       role: "CONTRIBUTOR",
       isActive: true,
     },
     create: {
       id: normalizedId,
-      email: userEmail,
-      name: name ?? null,
+      email: nextEmail,
+      name: nextName,
       azureAdId: normalizedId,
       role: "CONTRIBUTOR",
       isActive: true,
@@ -450,7 +478,6 @@ export async function createContractInDb(input: ContractFormInput): Promise<Mock
         projectId: created.id,
         componentId: null,
       })),
-      skipDuplicates: true,
     });
   }
 
@@ -495,7 +522,6 @@ export async function updateContractInDb(contractId: string, input: ContractForm
         projectId: contractId,
         componentId: null,
       })),
-      skipDuplicates: true,
     });
   }
 
@@ -604,7 +630,8 @@ export async function upsertWarSubmissionForContract(params: {
     );
   }
 
-  await ensureUserRecord(params.userId, params.userId, null);
+  const session = await auth();
+  await ensureUserRecord(params.userId, session?.user?.name ?? null, session?.user?.email ?? null);
 
   const currentPeriod = getCurrentSubmissionPeriod();
   const weekOf = new Date(currentPeriod.start);
