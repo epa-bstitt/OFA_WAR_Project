@@ -126,40 +126,44 @@ Make it executable:
 chmod +x buildpack-run.sh
 ```
 
-## Step 4: Database Migration from Local Docker to Cloud.gov
+## Step 4: Database Migration from SQLite to Cloud.gov
 
-### 4.1 Export Local Database
+The migration reads `prisma/dev-db.sqlite`, validates its relationships, applies the
+Prisma PostgreSQL baseline, copies all models in dependency order, and verifies row
+counts and SHA-256 hashes. Binding credentials remain in the conduit-provided
+`VCAP_SERVICES` environment and are not written to disk.
 
-```bash
-# Start local Docker PostgreSQL if not running
-docker-compose up -d postgres
+### 4.1 Back Up and Validate SQLite
 
-# Export local database
-docker exec epa-postgres pg_dump -U epauser -d epadb --format=custom > epa_backup.dump
+Create an external backup before running any source repair. Then generate both Prisma
+clients and run the source preflight:
 
-# Or export as SQL
-docker exec epa-postgres pg_dump -U epauser -d epadb --inserts > epa_backup.sql
+```powershell
+Copy-Item prisma\dev-db.sqlite ..\dev-db-before-postgres.sqlite
+npm run db:generate
+npm run db:generate:sqlite
+node scripts\migrate-sqlite-to-postgres.mjs --inventory-only
 ```
 
-### 4.2 Prepare Cloud.gov Database
+If preflight reports the known duplicate orphaned Daycom rows, run the guarded repair
+and repeat inventory. The repair aborts unless exactly ten orphaned rows match ten
+valid rows field-for-field.
 
-```bash
-# SSH into the app container (after initial deployment)
-cf ssh epa-business-platform
-
-# Or use the conduit plugin for direct database access
-cf install-plugin conduit -r CF-Community
-cf conduit epa-db -- pg_restore --verbose --clean --no-acl --no-owner -h localhost -U user -d dbname < epa_backup.dump
+```powershell
+npm run db:repair:orphaned-daycom
+node scripts\migrate-sqlite-to-postgres.mjs --inventory-only
 ```
 
-### 4.3 Alternative: Manual Migration via pgAdmin
+### 4.2 Apply and Verify the Migration
 
-1. Get Cloud.gov database credentials:
-   ```bash
-   cf service-key epa-db credentials-key
-   ```
+Wait until `cf8 service epa-db` reports `create succeeded`, then install conduit and
+run the migration. The destination must be empty; the transfer aborts otherwise.
 
-2. Use pgAdmin or any PostgreSQL client to connect and restore the backup
+```powershell
+cf8 install-plugin conduit -r CF-Community -f
+npm run db:migrate:cloudgov
+npm run db:verify:cloudgov
+```
 
 ## Step 5: Deploy Application
 

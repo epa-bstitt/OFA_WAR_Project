@@ -1,0 +1,19 @@
+---
+applications:
+  - name: epa-business-platform
+    buildpacks:
+      - https://github.com/cloudfoundry/nodejs-buildpack
+    stack: cflinuxfs4
+    memory: 1G
+    disk_quota: 2G
+    instances: 1
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      ENABLE_DEMO_AUTH: "true"
+      NEXTAUTH_URL: https://epa-business-platform.app.cloud.gov
+      NPM_CONFIG_PRODUCTION: "true"
+    services:
+      - epa-db
+    routes:
+      - route: epa-business-platform.app.cloud.gov
+    health-check-type: port

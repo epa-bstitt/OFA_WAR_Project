@@ -1,0 +1,7 @@
+.env
+.env.*
+node_modules
+*.sqlite
+*.sqlite-journal
+dist
+coverage

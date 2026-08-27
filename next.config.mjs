@@ -3,6 +3,7 @@ const enforceStrictTypes =
 	process.env.CI === "true" || process.env.ENFORCE_STRICT_TYPES === "true";
 
 const nextConfig = {
+	output: "standalone",
 	eslint: {
 		ignoreDuringBuilds: false,
 	},

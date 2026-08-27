@@ -4,7 +4,6 @@ import {
   deleteContractInDb,
   getContractByIdFromDb,
   updateContractInDb,
-  updateContractPaltTrackingInDb,
 } from "@/lib/contracts-db";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";

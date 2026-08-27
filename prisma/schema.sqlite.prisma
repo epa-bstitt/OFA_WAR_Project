@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  output        = "./generated/sqlite-client"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = env("SQLITE_DATABASE_URL")
 }
 
 model User {
@@ -80,25 +82,25 @@ model ImportJobFileResult {
 }
 
 model Contract {
-  id                     String       @id @default(cuid())
-  contractName           String
-  category               String
-  assigneeId             String?
-  imageUrl               String?
-  imageAlt               String?
-  cor                    String?
-  contractNumber         String?
-  office                 String?
-  nextPeriodOfPerf       String?
-  ultimateCompletionDate String?
-  co                     String?
-  cs                     String?
-  orderNumber            String?
+  id                       String       @id @default(cuid())
+  contractName             String
+  category                 String
+  assigneeId               String?
+  imageUrl                 String?
+  imageAlt                 String?
+  cor                      String?
+  contractNumber           String?
+  office                   String?
+  nextPeriodOfPerf         String?
+  ultimateCompletionDate   String?
+  co                       String?
+  cs                       String?
+  orderNumber              String?
   currentUpdatePlaceholder String?
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
-  assignee               User?        @relation("ContractAssignee", fields: [assigneeId], references: [id])
-  submissions            Submission[]
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  assignee                 User?        @relation("ContractAssignee", fields: [assigneeId], references: [id])
+  submissions              Submission[]
 
   @@index([assigneeId])
   @@index([category])
@@ -141,7 +143,7 @@ model Submission {
 }
 
 model Review {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   submissionId String
   reviewerId   String
   status       String
@@ -149,10 +151,10 @@ model Review {
   originalText String?
   editedText   String?
   editReason   String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   submission   Submission @relation(fields: [submissionId], references: [id])
-  reviewer     User     @relation(fields: [reviewerId], references: [id])
+  reviewer     User       @relation(fields: [reviewerId], references: [id])
 
   @@index([submissionId])
   @@index([reviewerId])
@@ -160,13 +162,13 @@ model Review {
 }
 
 model WorkflowState {
-  id           String   @id @default(cuid())
-  submissionId String   @unique
-  currentStage String   @default("SUBMISSION")
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  currentStage String     @default("SUBMISSION")
   assignedTo   String?
   dueDate      DateTime?
   notes        String?
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime   @updatedAt
   submission   Submission @relation(fields: [submissionId], references: [id])
 
   @@map("workflow_states")
