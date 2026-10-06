@@ -523,6 +523,7 @@ export function OverseerReviewDeck({
                   Request More Information / Request Change
                 </p>
                 <Textarea
+                  aria-label="Request more information or request a change"
                   value={inlineComment}
                   onChange={(event) => setInlineComment(event.target.value)}
                   placeholder="Add a short note if this submission needs follow-up."

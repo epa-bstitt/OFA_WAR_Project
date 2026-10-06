@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, hasMinimumRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
+import { isJakeBejaUser } from "@/lib/work-modes";
 import {
   AlignmentType,
   BorderStyle,
@@ -136,25 +137,61 @@ function buildUpdateParagraphs(rawText: string): Paragraph[] {
   });
 }
 
-function buildShadedUpdateContainer(rawText: string): Table {
+function buildCategoryTable(rows: ExportRow[]): Table {
   const border = {
     style: BorderStyle.SINGLE,
-    color: "E2E8F0",
+    color: "CBD5E1",
     size: 4,
   };
+
+  const headerCell = (text: string, width: number) =>
+    new TableCell({
+      width: { size: width, type: WidthType.PERCENTAGE },
+      shading: { fill: "DCE6F1" },
+      margins: { top: 100, bottom: 100, left: 100, right: 100 },
+      children: [new Paragraph({ children: [new TextRun({ text, bold: true, color: "1F2937" })] })],
+    });
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
       new TableRow({
         children: [
-          new TableCell({
-            children: buildUpdateParagraphs(rawText),
-            shading: { fill: "F8FAFC" },
-            margins: { top: 120, bottom: 120, left: 120, right: 120 },
-          }),
+          headerCell("Contract", 24),
+          headerCell("Contributor", 18),
+          headerCell("Week Of", 14),
+          headerCell("Current Update", 44),
         ],
+        tableHeader: true,
       }),
+      ...rows.map(
+        (row) =>
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 24, type: WidthType.PERCENTAGE },
+                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                children: [new Paragraph({ children: [new TextRun({ text: row.contractName, bold: true })] })],
+              }),
+              new TableCell({
+                width: { size: 18, type: WidthType.PERCENTAGE },
+                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                children: [new Paragraph(row.contributorName)],
+              }),
+              new TableCell({
+                width: { size: 14, type: WidthType.PERCENTAGE },
+                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                children: [new Paragraph(formatDateLabel(row.weekOf))],
+              }),
+              new TableCell({
+                width: { size: 44, type: WidthType.PERCENTAGE },
+                shading: { fill: "F8FAFC" },
+                margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                children: buildUpdateParagraphs(row.rawText),
+              }),
+            ],
+          })
+      ),
     ],
     borders: {
       top: border,
@@ -167,7 +204,7 @@ function buildShadedUpdateContainer(rawText: string): Table {
   });
 }
 
-function buildDocxBuffer(rows: ExportRow[], currentPeriodId: string): Promise<Buffer> {
+export function buildDocxBuffer(rows: ExportRow[], periodDate: Date): Promise<Buffer> {
   const latestRows = collapseToLatestCurrentUpdate(rows);
 
   const byCategory = {
@@ -193,7 +230,7 @@ function buildDocxBuffer(rows: ExportRow[], currentPeriodId: string): Promise<Bu
     new Paragraph({
       children: [
         new TextRun({ text: "Biweekly Period: ", bold: true }),
-        new TextRun({ text: currentPeriodId }),
+        new TextRun({ text: `Week of ${formatDateLabel(periodDate)}` }),
       ],
       spacing: { after: 60 },
     }),
@@ -221,42 +258,7 @@ function buildDocxBuffer(rows: ExportRow[], currentPeriodId: string): Promise<Bu
 
     children.push(sectionTitle(title));
 
-    for (const [index, row] of categoryRows.entries()) {
-      children.push(
-        new Paragraph({
-          text: row.contractName,
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 180, after: 40 },
-        })
-      );
-
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Current Update", bold: true }),
-            new TextRun({
-              text: `  (${formatDateLabel(row.weekOf)} by ${row.contributorName})`,
-              italics: true,
-              color: "6B7280",
-            }),
-          ],
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 20, after: 70 },
-        })
-      );
-
-      children.push(buildShadedUpdateContainer(row.rawText));
-
-      if (index < categoryRows.length - 1) {
-        children.push(
-          new Paragraph({
-            text: "",
-            thematicBreak: true,
-            spacing: { before: 180, after: 140 },
-          })
-        );
-      }
-    }
+    children.push(buildCategoryTable(categoryRows));
   };
 
   addCategoryBlock("New Awards and Recompetes", byCategory.recompetes);
@@ -289,7 +291,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!hasMinimumRole(session.user.role, "PROGRAM_OVERSEER")) {
+  const canExport =
+    hasMinimumRole(session.user.role, "PROGRAM_OVERSEER") ||
+    isJakeBejaUser(session.user.id, session.user.email);
+  if (!canExport) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -366,7 +371,7 @@ export async function GET(request: NextRequest) {
     })
     .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-  const docBuffer = await buildDocxBuffer(rows, currentPeriod.id);
+  const docBuffer = await buildDocxBuffer(rows, currentPeriod.deadline);
   const filename = `war-overview-${currentPeriod.id}.docx`;
 
   return new NextResponse(docBuffer, {

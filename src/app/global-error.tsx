@@ -17,7 +17,7 @@ export default function GlobalError({
   return (
     <html>
       <body>
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <main id="main-content" className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
           <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
             <div className="flex justify-center mb-4">
               <EPALogo size="lg" />
@@ -35,7 +35,7 @@ export default function GlobalError({
               Try Again
             </button>
           </div>
-        </div>
+        </main>
       </body>
     </html>
   );

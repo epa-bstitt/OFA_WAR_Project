@@ -1,29 +1,27 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS, Role } from "@/config/navigation";
+import { NAV_ITEMS } from "@/config/navigation";
 import type { MockContract } from "@/lib/mock-contracts";
+import { useWorkMode } from "./WorkModeProvider";
 
 interface SidebarProps {
   className?: string;
 }
 
 export function Sidebar({ className }: SidebarProps) {
-  const { data: session } = useSession();
+  const { workMode } = useWorkMode();
   const pathname = usePathname();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [contracts, setContracts] = useState<MockContract[]>([]);
   const [isLoadingContracts, setIsLoadingContracts] = useState(false);
 
-  const sessionRole = (session?.user as { role?: Role } | undefined)?.role;
-  const userRole = sessionRole || "CONTRIBUTOR";
-  const navItems = NAV_ITEMS[userRole] || [];
+  const navItems = NAV_ITEMS[workMode] || [];
   const canSearchContracts = navItems.some((item) => item.href.startsWith("/contracts"));
 
   useEffect(() => {
@@ -108,7 +106,7 @@ export function Sidebar({ className }: SidebarProps) {
         className
       )}
     >
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+      <nav aria-label="Sidebar" className="flex-1 p-4 space-y-1 overflow-y-auto">
         {canSearchContracts && (
           <div className="mb-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -119,6 +117,7 @@ export function Sidebar({ className }: SidebarProps) {
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="search"
+                aria-label="Search contracts"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search contracts, COR, office..."
@@ -127,7 +126,12 @@ export function Sidebar({ className }: SidebarProps) {
             </form>
 
             {normalizedSearch && (
-              <div className="mt-2 space-y-1 rounded-md border border-slate-200 bg-white p-2 shadow-sm">
+              <div
+                className="mt-2 space-y-1 rounded-md border border-slate-200 bg-white p-2 shadow-sm"
+                role="status"
+                aria-live="polite"
+                aria-busy={isLoadingContracts}
+              >
                 {isLoadingContracts && (
                   <p className="px-1 py-1 text-xs text-slate-500">Searching contracts...</p>
                 )}
@@ -163,6 +167,7 @@ export function Sidebar({ className }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                 isActive
@@ -177,7 +182,7 @@ export function Sidebar({ className }: SidebarProps) {
         })}
       </nav>
 
-      {userRole !== "CONTRIBUTOR" ? (
+      {workMode !== "CONTRIBUTOR" ? (
         <div className="border-t p-4">
           <p className="text-xs text-slate-500">EPA Business Platform v1.0</p>
         </div>

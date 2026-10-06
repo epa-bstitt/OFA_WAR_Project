@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { BiWeeklyStaffSubmissionPeriod } from "@/app/actions/review";
 import { Mail } from "lucide-react";
 
@@ -138,8 +138,7 @@ export function BiWeeklyStaffCards({ periods }: BiWeeklyStaffCardsProps) {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-12 w-12 border border-white/80">
-                          <AvatarImage src={card.profileImageUrl} alt={`${card.name} profile`} />
+                        <Avatar className="h-12 w-12 border border-white/80 bg-slate-100 text-slate-700">
                           <AvatarFallback>{getInitials(card.name)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -197,8 +196,7 @@ export function BiWeeklyStaffCards({ periods }: BiWeeklyStaffCardsProps) {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-12 w-12 border border-white/80">
-                          <AvatarImage src={card.profileImageUrl} alt={`${card.name} profile`} />
+                        <Avatar className="h-12 w-12 border border-white/80 bg-slate-100 text-slate-700">
                           <AvatarFallback>{getInitials(card.name)}</AvatarFallback>
                         </Avatar>
                         <div>

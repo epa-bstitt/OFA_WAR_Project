@@ -11,7 +11,12 @@ model User {
   id                         String              @id @default(cuid())
   email                      String              @unique
   name                       String?
-  azureAdId                  String              @unique
+  azureAdId                  String?             @unique
+  loginGovId                 String?             @unique
+  passwordHash               String?
+  mustChangePassword         Boolean             @default(false)
+  passwordChangedAt          DateTime?
+  sessionVersion             Int                 @default(0)
   role                       String              @default("CONTRIBUTOR")
   isActive                   Boolean             @default(true)
   createdAt                  DateTime            @default(now())

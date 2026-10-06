@@ -140,10 +140,11 @@ export function AuditLogViewer({
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label>Search</Label>
+              <Label htmlFor="audit-search">Search</Label>
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="audit-search"
                   placeholder="Search logs..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -153,9 +154,9 @@ export function AuditLogViewer({
             </div>
 
             <div className="space-y-2">
-              <Label>Action</Label>
+              <Label htmlFor="audit-action">Action</Label>
               <Select value={selectedAction} onValueChange={setSelectedAction}>
-                <SelectTrigger>
+                <SelectTrigger id="audit-action">
                   <SelectValue placeholder="All actions" />
                 </SelectTrigger>
                 <SelectContent>
@@ -170,12 +171,12 @@ export function AuditLogViewer({
             </div>
 
             <div className="space-y-2">
-              <Label>Resource Type</Label>
+              <Label htmlFor="audit-resource-type">Resource Type</Label>
               <Select
                 value={selectedResourceType}
                 onValueChange={setSelectedResourceType}
               >
-                <SelectTrigger>
+                <SelectTrigger id="audit-resource-type">
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
@@ -190,15 +191,17 @@ export function AuditLogViewer({
             </div>
 
             <div className="space-y-2">
-              <Label>Date Range</Label>
+              <Label id="audit-date-range-label">Date Range</Label>
               <div className="flex gap-2">
                 <Input
+                  aria-label="Audit start date"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   placeholder="From"
                 />
                 <Input
+                  aria-label="Audit end date"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}

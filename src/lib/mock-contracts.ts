@@ -1,5 +1,6 @@
 export interface MockContractSubmission {
   id: string;
+  periodId?: string;
   weekOf: string;
   submittedAt: string;
   status: "APPROVED" | "IN_REVIEW" | "DRAFT";
@@ -306,8 +307,6 @@ const mockContractsByUser: Record<string, MockContract[]> = {
       ],
     },
   ],
-  "demo-contributor": [],
-  "demo-aggregator": [],
   "demo-overseer": [],
 };
 

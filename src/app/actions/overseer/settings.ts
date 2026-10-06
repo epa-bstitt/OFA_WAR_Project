@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { logAuditEvent, logAuditEvents } from "@/lib/audit/logger";
 import { getStoredSettings, setStoredSettings } from "@/app/api/admin/settings/store";
 import { buildContributorEmail, normalizeContributorName } from "@/lib/contributor-profile";
+import { isJakeBejaUser } from "@/lib/work-modes";
 import {
   type AggregatorAccessSettings,
   type ContributorAccessSettings,
@@ -27,7 +28,10 @@ function hasOverseerAccess(role: string | undefined) {
 
 async function requireOverseerAccess() {
   const session = await auth();
-  if (!session?.user?.id || !hasOverseerAccess(session.user.role)) {
+  if (
+    !session?.user?.id ||
+    (!hasOverseerAccess(session.user.role) && !isJakeBejaUser(session.user.id, session.user.email))
+  ) {
     throw new Error("Insufficient permissions");
   }
 
@@ -49,7 +53,11 @@ export async function getOverseerSettingsData(): Promise<{
     const [storedSettings, contributors] = await Promise.all([
       getStoredSettings(),
       prisma.user.findMany({
-        where: { role: "CONTRIBUTOR" },
+        where: {
+          role: {
+            in: ["CONTRIBUTOR", "AGGREGATOR"],
+          },
+        },
         orderBy: [{ isActive: "desc" }, { name: "asc" }],
         select: {
           id: true,

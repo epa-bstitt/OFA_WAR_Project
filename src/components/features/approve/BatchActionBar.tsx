@@ -255,6 +255,7 @@ export function BatchActionBar({
           </div>
 
           <Textarea
+            aria-label="Optional approval notes"
             placeholder="Optional approval notes..."
             value={approveNotes}
             onChange={(e) => setApproveNotes(e.target.value)}
@@ -303,7 +304,7 @@ export function BatchActionBar({
               value={rejectReason}
               onValueChange={setRejectReason}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label="Rejection reason" aria-required="true">
                 <SelectValue placeholder="Select rejection reason" />
               </SelectTrigger>
               <SelectContent>
@@ -316,6 +317,7 @@ export function BatchActionBar({
             </Select>
 
             <Textarea
+              aria-label="Additional rejection notes"
               placeholder="Additional notes or details..."
               value={rejectNotes}
               onChange={(e) => setRejectNotes(e.target.value)}

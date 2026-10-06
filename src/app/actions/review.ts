@@ -7,6 +7,13 @@ import { prisma } from "@/lib/db";
 import { getCurrentSubmissionPeriod, getSubmissionPeriodsFromJanuary } from "@/lib/submission-periods";
 // import { isMockModeEnabled } from "@/lib/admin/mock-mode-server";
 import { logWorkflowEvent } from "@/lib/audit/logger";
+import { ROLE_HIERARCHY } from "@/config/navigation";
+import { isJakeBejaUser } from "@/lib/work-modes";
+
+function hasAggregatorAccess(user: { id?: string | null; email?: string | null; role: string }): boolean {
+  return isJakeBejaUser(user.id, user.email) ||
+    (ROLE_HIERARCHY[user.role as keyof typeof ROLE_HIERARCHY] ?? 0) >= ROLE_HIERARCHY.AGGREGATOR;
+}
 
 function serializeAuditMetadata(metadata: Record<string, unknown>): string {
   try {
@@ -76,6 +83,7 @@ export interface BiWeeklyStaffSubmissionCard {
   userId: string;
   name: string;
   email: string;
+  role: string;
   profileImageUrl: string;
   status: StaffSubmissionStatus;
   submittedProjects: string[];
@@ -153,15 +161,7 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
       return { success: false, error: "Not authenticated" };
     }
 
-    const ROLE_HIERARCHY: Record<string, number> = {
-      ADMINISTRATOR: 4,
-      PROGRAM_OVERSEER: 3,
-      AGGREGATOR: 2,
-      CONTRIBUTOR: 1,
-    };
-
-    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
-    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+    if (!hasAggregatorAccess(session.user)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -169,15 +169,18 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
     const currentPeriod = getCurrentSubmissionPeriod(now);
     const periodsToLoad = getSubmissionPeriodsFromJanuary(now);
 
-    const contributors = await prisma.user.findMany({
+    const trackedUsers = await prisma.user.findMany({
       where: {
-        role: "CONTRIBUTOR",
+        role: {
+          in: ["CONTRIBUTOR", "AGGREGATOR"],
+        },
         isActive: true,
       },
       select: {
         id: true,
         name: true,
         email: true,
+        role: true,
       },
       orderBy: {
         name: "asc",
@@ -186,7 +189,7 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
 
     const assignments = await prisma.projectAssignment.findMany({
       where: {
-        userId: { in: contributors.map((user) => user.id) },
+        userId: { in: trackedUsers.map((user) => user.id) },
         project: {
           status: { not: "COMPLETED" },
         },
@@ -202,7 +205,7 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
       },
     });
 
-    if (contributors.length === 0 || assignments.length === 0) {
+    if (trackedUsers.length === 0 || assignments.length === 0) {
       return { success: false, error: "No contributors or assignments found." };
     }
 
@@ -260,7 +263,17 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
         submissionMap.set(submission.userId, current);
       }
 
-      const cards: BiWeeklyStaffSubmissionCard[] = contributors.map((user) => {
+      const cards: BiWeeklyStaffSubmissionCard[] = trackedUsers
+        .filter((user) => {
+          if (user.role === "CONTRIBUTOR") {
+            return true;
+          }
+
+          const hasAssignment = assignmentMap.has(user.id);
+          const hasSubmission = submissionMap.has(user.id);
+          return hasAssignment || hasSubmission;
+        })
+        .map((user) => {
         const assignedProjects = assignmentMap.get(user.id) || [];
         const submissionState = submissionMap.get(user.id) || {
           projectIds: new Set<string>(),
@@ -295,6 +308,7 @@ export async function getBiWeeklyStaffSubmissionStatus(): Promise<
           userId: user.id,
           name: user.name || user.email,
           email: user.email,
+          role: user.role || "CONTRIBUTOR",
           profileImageUrl: getProfileImageForUser(user.id),
           status,
           submittedProjects,
@@ -334,15 +348,7 @@ export async function getPendingSubmissions(
       return { success: false, error: "Not authenticated" };
     }
     
-    const ROLE_HIERARCHY: Record<string, number> = {
-      ADMINISTRATOR: 4,
-      PROGRAM_OVERSEER: 3,
-      AGGREGATOR: 2,
-      CONTRIBUTOR: 1,
-    };
-    
-    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
-    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+    if (!hasAggregatorAccess(session.user)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -407,15 +413,7 @@ export async function getReviewStats(): Promise<
       return { success: false, error: "Not authenticated" };
     }
     
-    const ROLE_HIERARCHY: Record<string, number> = {
-      ADMINISTRATOR: 4,
-      PROGRAM_OVERSEER: 3,
-      AGGREGATOR: 2,
-      CONTRIBUTOR: 1,
-    };
-    
-    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
-    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+    if (!hasAggregatorAccess(session.user)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -490,15 +488,7 @@ export async function createReview(
       return { success: false, error: "Not authenticated" };
     }
 
-    const ROLE_HIERARCHY: Record<string, number> = {
-      ADMINISTRATOR: 4,
-      PROGRAM_OVERSEER: 3,
-      AGGREGATOR: 2,
-      CONTRIBUTOR: 1,
-    };
-
-    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
-    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+    if (!hasAggregatorAccess(session.user)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -593,15 +583,7 @@ export async function approveSubmission(
       return { success: false, error: "Not authenticated" };
     }
     
-    const ROLE_HIERARCHY: Record<string, number> = {
-      ADMINISTRATOR: 4,
-      PROGRAM_OVERSEER: 3,
-      AGGREGATOR: 2,
-      CONTRIBUTOR: 1,
-    };
-    
-    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
-    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+    if (!hasAggregatorAccess(session.user)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -683,15 +665,7 @@ export async function rejectSubmission(
       return { success: false, error: "Not authenticated" };
     }
     
-    const ROLE_HIERARCHY: Record<string, number> = {
-      ADMINISTRATOR: 4,
-      PROGRAM_OVERSEER: 3,
-      AGGREGATOR: 2,
-      CONTRIBUTOR: 1,
-    };
-    
-    const userLevel = ROLE_HIERARCHY[session.user.role] || 0;
-    if (userLevel < ROLE_HIERARCHY["AGGREGATOR"]) {
+    if (!hasAggregatorAccess(session.user)) {
       return { success: false, error: "Insufficient permissions" };
     }
 

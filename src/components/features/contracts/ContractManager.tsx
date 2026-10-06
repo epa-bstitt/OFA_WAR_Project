@@ -237,6 +237,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
   const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>(INITIAL_ASSIGNEE_OPTIONS);
   const [assigneeSearch, setAssigneeSearch] = useState("");
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
+  const [activeAssigneeIndex, setActiveAssigneeIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ContractFormState, string>>>({});
@@ -756,50 +757,100 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
           </div>
 
           <div className="space-y-2">
-            <Label>Assigned To</Label>
+            <Label htmlFor={`${idPrefix}-assignee-search`}>Assigned To</Label>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <div className="relative">
                 <Input
+                  id={`${idPrefix}-assignee-search`}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={isAssigneeDropdownOpen}
+                  aria-controls={`${idPrefix}-assignee-options`}
+                  aria-activedescendant={
+                    isAssigneeDropdownOpen
+                      ? availableAssigneeOptions.length > 0
+                        ? `${idPrefix}-assignee-option-${activeAssigneeIndex}`
+                        : `${idPrefix}-assignee-option-custom`
+                      : undefined
+                  }
                   placeholder="Search for a person"
                   value={assigneeSearch}
                   onChange={(event) => {
                     const nextValue = event.target.value;
                     setAssigneeSearch(nextValue);
                     setIsAssigneeDropdownOpen(nextValue.trim().length > 0);
+                    setActiveAssigneeIndex(0);
                   }}
                   onFocus={() => {
                     if (assigneeSearch.trim().length > 0) {
                       setIsAssigneeDropdownOpen(true);
+                      setActiveAssigneeIndex(0);
                     }
                   }}
                   onBlur={() => {
                     window.setTimeout(() => setIsAssigneeDropdownOpen(false), 120);
                   }}
                   onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setIsAssigneeDropdownOpen(true);
+                      setActiveAssigneeIndex((current) =>
+                        Math.min(current + 1, Math.max(availableAssigneeOptions.length - 1, 0))
+                      );
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setActiveAssigneeIndex((current) => Math.max(current - 1, 0));
+                      return;
+                    }
+                    if (event.key === "Escape") {
+                      setIsAssigneeDropdownOpen(false);
+                      return;
+                    }
                     if (event.key === "Enter") {
                       event.preventDefault();
-                      addAssigneeFromSearch();
+                      const activeOption = availableAssigneeOptions[activeAssigneeIndex];
+                      if (isAssigneeDropdownOpen && activeOption) {
+                        addAssigneeToContract(activeOption.value);
+                        setError(null);
+                        toast.success(`${activeOption.label} added to the contract.`);
+                      } else {
+                        addAssigneeFromSearch();
+                      }
                     }
                   }}
                 />
                 {isAssigneeDropdownOpen && assigneeSearch.trim().length > 0 && (
-                  <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-md">
+                  <div
+                    id={`${idPrefix}-assignee-options`}
+                    role="listbox"
+                    aria-label="Matching assignees"
+                    className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-md"
+                  >
                     {availableAssigneeOptions.length === 0 ? (
-                      <button
-                        type="button"
-                        className="flex w-full cursor-pointer items-center rounded-sm px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+                      <div
+                        id={`${idPrefix}-assignee-option-custom`}
+                        role="option"
+                        aria-selected="true"
+                        className="flex w-full cursor-pointer items-center rounded-sm bg-slate-100 px-3 py-2 text-left text-sm text-slate-600"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={addAssigneeFromSearch}
                       >
                         Add &quot;{assigneeSearch.trim()}&quot;
-                      </button>
+                      </div>
                     ) : (
-                      availableAssigneeOptions.map((option) => (
-                        <button
+                      availableAssigneeOptions.map((option, optionIndex) => (
+                        <div
                           key={`${idPrefix}-search-${option.value}`}
-                          type="button"
-                          className="flex w-full cursor-pointer flex-col rounded-sm px-3 py-2 text-left hover:bg-slate-50"
+                          id={`${idPrefix}-assignee-option-${optionIndex}`}
+                          role="option"
+                          aria-selected={activeAssigneeIndex === optionIndex}
+                          className={`flex w-full cursor-pointer flex-col rounded-sm px-3 py-2 text-left ${
+                            activeAssigneeIndex === optionIndex ? "bg-slate-100" : "hover:bg-slate-50"
+                          }`}
                           onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() => setActiveAssigneeIndex(optionIndex)}
                           onClick={() => {
                             addAssigneeToContract(option.value);
                             setError(null);
@@ -808,7 +859,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                         >
                           <span className="font-medium text-slate-900">{option.label}</span>
                           <span className="text-xs text-slate-500">{option.email}</span>
-                        </button>
+                        </div>
                       ))
                     )}
                   </div>
@@ -1166,12 +1217,12 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 />
               </div>
               <div className="space-y-2">
-                <Label>Assignment</Label>
+                <Label htmlFor="contracts-assignment-filter">Assignment</Label>
                 <Select
                   value={assignmentFilter}
                   onValueChange={(value: "all" | "assigned" | "unassigned") => setAssignmentFilter(value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="contracts-assignment-filter">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1182,9 +1233,9 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Due Date</Label>
+                <Label htmlFor="contracts-due-date-filter">Due Date</Label>
                 <Select value={dueFilter} onValueChange={(value: "all" | "dueSoon") => setDueFilter(value)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="contracts-due-date-filter">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1194,10 +1245,10 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Sort By</Label>
+                <Label htmlFor="contracts-sort-by">Sort By</Label>
                 <div className="flex gap-2">
                   <Select value={sortBy} onValueChange={(value: "name" | "endDate" | "assignee") => setSortBy(value)}>
-                    <SelectTrigger>
+                    <SelectTrigger id="contracts-sort-by">
                       <SelectValue placeholder="Contract name" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1207,7 +1258,7 @@ export function ContractManager({ initialContracts, hideFilters = false }: Contr
                     </SelectContent>
                   </Select>
                   <Select value={sortDirection} onValueChange={(value: "asc" | "desc") => setSortDirection(value)}>
-                    <SelectTrigger className="w-[120px]">
+                    <SelectTrigger className="w-[120px]" aria-label="Sort direction">
                       <SelectValue placeholder="Asc" />
                     </SelectTrigger>
                     <SelectContent>

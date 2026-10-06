@@ -158,7 +158,7 @@ export function PromptManager({ prompts, onDelete, onSetActive }: PromptManagerP
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" aria-label={`Actions for ${prompt.name}`}>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>

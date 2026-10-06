@@ -303,6 +303,7 @@ export function ApprovalDashboard({
             <TableRow>
               <TableHead className="w-[40px]">
                 <Checkbox
+                  aria-label="Select all submissions"
                   checked={selectedIds.size === submissions.length && submissions.length > 0}
                   onCheckedChange={toggleAll}
                 />
@@ -327,6 +328,7 @@ export function ApprovalDashboard({
                   <TableRow key={submission.id}>
                     <TableCell>
                       <Checkbox
+                        aria-label={`Select submission from ${submission.user.name || submission.user.email}`}
                         checked={selectedIds.has(submission.id)}
                         onCheckedChange={() => toggleSelection(submission.id)}
                       />
@@ -378,6 +380,9 @@ export function ApprovalDashboard({
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label={`${isExpanded ? "Collapse" : "Expand"} submission from ${submission.user.name || submission.user.email}`}
+                          aria-expanded={isExpanded}
+                          aria-controls={`submission-details-${submission.id}`}
                           onClick={() => setExpandedId(isExpanded ? null : submission.id)}
                         >
                           {isExpanded ? (
@@ -388,7 +393,11 @@ export function ApprovalDashboard({
                         </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Actions for submission from ${submission.user.name || submission.user.email}`}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -422,7 +431,7 @@ export function ApprovalDashboard({
                   {isExpanded && (
                     <TableRow key={`${submission.id}-expanded`}>
                       <TableCell colSpan={8} className="bg-slate-50">
-                        <div className="py-4 space-y-4">
+                        <div id={`submission-details-${submission.id}`} className="py-4 space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <h4 className="text-sm font-medium mb-2">Raw Text</h4>
@@ -469,6 +478,8 @@ export function ApprovalDashboard({
             </DialogDescription>
           </DialogHeader>
           <Textarea
+            aria-label="Rejection reason"
+            aria-required="true"
             placeholder="Enter rejection reason..."
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}

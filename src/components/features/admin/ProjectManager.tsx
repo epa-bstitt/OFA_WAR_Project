@@ -442,12 +442,12 @@ export function ProjectManager({ initialProjects, users }: ProjectManagerProps) 
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div className="space-y-2">
-                            <Label>User</Label>
+                            <Label htmlFor="project-assignment-user">User</Label>
                             <Select
                               value={selectedUserId}
                               onValueChange={setSelectedUserId}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger id="project-assignment-user">
                                 <SelectValue placeholder="Select a user" />
                               </SelectTrigger>
                               <SelectContent>
@@ -460,12 +460,12 @@ export function ProjectManager({ initialProjects, users }: ProjectManagerProps) 
                             </Select>
                           </div>
                           <div className="space-y-2">
-                            <Label>Component (Optional)</Label>
+                            <Label htmlFor="project-assignment-component">Component (Optional)</Label>
                             <Select
                               value={selectedComponentId}
                               onValueChange={setSelectedComponentId}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger id="project-assignment-component">
                                 <SelectValue placeholder="All components" />
                               </SelectTrigger>
                               <SelectContent>

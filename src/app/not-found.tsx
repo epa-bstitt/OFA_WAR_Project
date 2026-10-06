@@ -12,13 +12,15 @@ export const metadata: Metadata = {
 
 export default function NotFoundPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <main id="main-content" className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <Search className="h-12 w-12 text-[#005ea2]" />
           </div>
-          <CardTitle className="text-2xl font-bold">Page Not Found</CardTitle>
+          <CardTitle asChild className="text-2xl font-bold">
+            <h1>Page Not Found</h1>
+          </CardTitle>
           <CardDescription>
             The page you&apos;re looking for doesn&apos;t exist or has been moved.
           </CardDescription>
@@ -40,6 +42,6 @@ export default function NotFoundPage() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

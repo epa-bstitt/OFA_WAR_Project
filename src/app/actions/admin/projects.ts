@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hasRequiredRole } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit/logger";
+import { isJakeBejaUser } from "@/lib/work-modes";
 import { z } from "zod";
 
 // Types
@@ -74,7 +75,8 @@ async function checkAdminPermission() {
   }
 
   const isAdmin = hasRequiredRole(session.user.role, ["ADMINISTRATOR"]) || 
-                  hasRequiredRole(session.user.role, ["PROGRAM_OVERSEER"]);
+                  hasRequiredRole(session.user.role, ["PROGRAM_OVERSEER"]) ||
+                  isJakeBejaUser(session.user.id, session.user.email);
   
   if (!isAdmin) {
     return { authorized: false, error: "Unauthorized - Admin access required" };

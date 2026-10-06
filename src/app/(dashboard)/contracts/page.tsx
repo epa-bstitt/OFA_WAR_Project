@@ -19,11 +19,6 @@ export default async function ContractsPage() {
     redirect("/login");
   }
 
-  const isProgramOverseer = session.user.role === "PROGRAM_OVERSEER";
-  if (isProgramOverseer) {
-    redirect("/approve?view=list");
-  }
-
   const hasPermission = await hasMinimumRoleLevel("AGGREGATOR");
   if (!hasPermission) {
     redirect("/dashboard");

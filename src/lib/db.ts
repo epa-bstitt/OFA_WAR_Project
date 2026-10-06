@@ -1,10 +1,21 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaClient as SqlitePrismaClient } from "../../prisma/generated/sqlite-client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+function createPrismaClient(): PrismaClient {
+  if (process.env.DATABASE_URL?.startsWith("file:")) {
+    return new SqlitePrismaClient({
+      datasources: { db: { url: process.env.DATABASE_URL } },
+    }) as unknown as PrismaClient;
+  }
+
+  return new PrismaClient();
+}
+
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 

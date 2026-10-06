@@ -417,12 +417,12 @@ export function OverseerSettingsManager({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Status</Label>
+                  <Label htmlFor="contributor-status-filter">Status</Label>
                   <Select
                     value={contributorStatusFilter}
                     onValueChange={(value: "all" | "active" | "disabled") => setContributorStatusFilter(value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="contributor-status-filter">
                       <SelectValue placeholder="All contributors" />
                     </SelectTrigger>
                     <SelectContent>

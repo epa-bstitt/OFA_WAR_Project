@@ -1,0 +1,11 @@
+{
+  "overseer": {
+    "contributorAccess": {
+      "dashboardEnabled": true,
+      "contractCardsVisible": true,
+      "enhancedEditorEnabled": true,
+      "submissionEnabled": true,
+      "deadlineOverrideEnabled": false
+    }
+  }
+}

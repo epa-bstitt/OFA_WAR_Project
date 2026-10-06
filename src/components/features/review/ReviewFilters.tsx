@@ -53,6 +53,7 @@ export function ReviewFilters({
       <div className="relative flex-1 w-full sm:max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
+          aria-label="Search by contributor"
           placeholder="Search by contributor..."
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -62,7 +63,7 @@ export function ReviewFilters({
 
       <div className="flex gap-2 w-full sm:w-auto">
         <Select value={contributorFilter} onValueChange={onContributorFilterChange}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px]" aria-label="Filter by contributor">
             <SelectValue placeholder="All Contributors" />
           </SelectTrigger>
           <SelectContent>
@@ -76,7 +77,7 @@ export function ReviewFilters({
         </Select>
 
         <Select value={weekFilter} onValueChange={onWeekFilterChange}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px]" aria-label="Filter by week">
             <SelectValue placeholder="All Weeks" />
           </SelectTrigger>
           <SelectContent>
@@ -90,7 +91,7 @@ export function ReviewFilters({
         </Select>
 
         {hasFilters && (
-          <Button variant="ghost" size="icon" onClick={clearFilters}>
+          <Button variant="ghost" size="icon" onClick={clearFilters} aria-label="Clear filters">
             <X className="h-4 w-4" />
           </Button>
         )}

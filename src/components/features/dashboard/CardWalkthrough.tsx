@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -28,16 +28,11 @@ interface HighlightRect {
 }
 
 export function CardWalkthrough({ steps, open, onClose }: CardWalkthroughProps) {
-  const [mounted, setMounted] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [rememberDismissal, setRememberDismissal] = useState(false);
   const [highlightRect, setHighlightRect] = useState<HighlightRect | null>(null);
 
   const currentStep = steps[currentStepIndex];
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -144,48 +139,57 @@ export function CardWalkthrough({ steps, open, onClose }: CardWalkthroughProps) 
     };
   }, [highlightRect]);
 
-  if (!mounted || !open || !currentStep || steps.length === 0) {
+  if (!open || !currentStep || steps.length === 0) {
     return null;
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-[90]">
-      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-[1px]" />
+  return (
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(nextOpen) => !nextOpen && onClose(rememberDismissal)}
+    >
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[1px]" />
 
-      {highlightRect && (
-        <div
-          className="pointer-events-none absolute rounded-2xl border-2 border-sky-300 bg-white/5 shadow-[0_0_0_9999px_rgba(15,23,42,0.55)] transition-all duration-300"
-          style={{
-            top: highlightRect.top,
-            left: highlightRect.left,
-            width: highlightRect.width,
-            height: highlightRect.height,
-          }}
-        />
-      )}
+        {highlightRect && (
+          <div
+            className="pointer-events-none fixed z-[91] rounded-2xl border-2 border-sky-300 bg-white/5 shadow-[0_0_0_9999px_rgba(15,23,42,0.55)] transition-all duration-300"
+            style={{
+              top: highlightRect.top,
+              left: highlightRect.left,
+              width: highlightRect.width,
+              height: highlightRect.height,
+            }}
+          />
+        )}
 
-      <div
-        className="absolute rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
-        style={bubbleStyle}
-      >
+        <DialogPrimitive.Content
+          className="fixed z-[92] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl focus:outline-none"
+          style={bubbleStyle}
+        >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
               Card walkthrough
             </p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">{currentStep.title}</h3>
+            <DialogPrimitive.Title className="mt-1 text-lg font-semibold text-slate-900">
+              {currentStep.title}
+            </DialogPrimitive.Title>
           </div>
-          <button
-            type="button"
-            onClick={() => onClose(rememberDismissal)}
-            className="rounded-full p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-            aria-label="Close walkthrough"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <DialogPrimitive.Close asChild>
+            <button
+              type="button"
+              className="rounded-full p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              aria-label="Close walkthrough"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </DialogPrimitive.Close>
         </div>
 
-        <p className="text-sm leading-6 text-slate-600">{currentStep.description}</p>
+        <DialogPrimitive.Description className="text-sm leading-6 text-slate-600">
+          {currentStep.description}
+        </DialogPrimitive.Description>
 
         <div className="mt-4 space-y-3">
           <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -230,8 +234,8 @@ export function CardWalkthrough({ steps, open, onClose }: CardWalkthroughProps) 
             </div>
           </div>
         </div>
-      </div>
-    </div>,
-    document.body
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

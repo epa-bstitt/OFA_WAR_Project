@@ -2,15 +2,15 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ContractUpdateCards } from "@/components/features/dashboard/ContractUpdateCards";
-import { ContributorUserSwitcher } from "@/components/features/dashboard/ContributorUserSwitcher";
 import { ContractLifecycleNotifier } from "@/components/features/contracts/ContractLifecycleNotifier";
 import { Card, CardContent } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { isEnhancedContractSubmissionsEnabled } from "@/lib/feature-flags";
 import { getMockContractsForUserFromDb } from "@/lib/contracts-db";
 import { getStoredSettings } from "@/app/api/admin/settings/store";
 import { getOverseerSettings } from "@/lib/overseer-settings";
+import type { Role } from "@/config/navigation";
+import { getServerWorkMode } from "@/lib/server-work-mode";
 
 function isContributorVisibleContract(category: string) {
   return category !== "Legacy Contracts" && category !== "Completed";
@@ -23,52 +23,23 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-interface DashboardPageProps {
-  searchParams?: {
-    asUser?: string;
-  };
-}
-
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage() {
   const session = await auth();
   const sessionUserId = session?.user?.id ?? "demo-admin";
+  const sessionUserEmail = session?.user?.email ?? null;
   const sessionUserRole = session?.user?.role ?? "ADMINISTRATOR";
+  const workMode = getServerWorkMode(sessionUserRole as Role, sessionUserId, sessionUserEmail);
+  const isContributorMode = workMode === "CONTRIBUTOR";
 
-  if (sessionUserRole === "PROGRAM_OVERSEER") {
+  if (workMode === "PROGRAM_OVERSEER") {
     redirect("/approve");
   }
 
-  if (sessionUserRole === "AGGREGATOR") {
+  if (workMode === "AGGREGATOR") {
     redirect("/review");
   }
 
-  const contributorUsers = sessionUserRole === "CONTRIBUTOR"
-    ? await prisma.user.findMany({
-      where: {
-        role: "CONTRIBUTOR",
-        isActive: true,
-      },
-      orderBy: [
-        { name: "asc" },
-        { email: "asc" },
-      ],
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    })
-    : [];
-
-  const selectedContributorId = searchParams?.asUser;
-  const isAllowedContributorSelection =
-    sessionUserRole === "CONTRIBUTOR" &&
-    !!selectedContributorId &&
-    contributorUsers.some((user) => user.id === selectedContributorId);
-
-  const activeUserId = isAllowedContributorSelection ? selectedContributorId : sessionUserId;
-
-  const contracts = await getMockContractsForUserFromDb(activeUserId);
+  const contracts = await getMockContractsForUserFromDb(sessionUserId);
   const dashboardContracts = contracts.filter((contract) => isContributorVisibleContract(contract.category));
   const storedSettings = await getStoredSettings();
   const contributorAccess = getOverseerSettings(storedSettings).contributorAccess;
@@ -82,14 +53,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         description="Edit this week's updates by contract. Open any card to review its full submission history."
       />
 
-      {sessionUserRole === "CONTRIBUTOR" && contributorUsers.length > 0 ? (
-        <ContributorUserSwitcher
-          users={contributorUsers}
-          selectedUserId={activeUserId}
-        />
-      ) : null}
-
-      {sessionUserRole === "CONTRIBUTOR" ? (
+      {isContributorMode ? (
         <ContractLifecycleNotifier
           contracts={dashboardContracts}
           audience="contributor"

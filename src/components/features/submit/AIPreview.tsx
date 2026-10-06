@@ -139,6 +139,7 @@ export function AIPreview({
             {isEditing ? (
               <div className="space-y-3">
                 <Textarea
+                  aria-label="Edit terse version"
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
                   className="min-h-[200px]"
@@ -164,6 +165,7 @@ export function AIPreview({
             ) : isUsingManual ? (
               <div className="space-y-3">
                 <Textarea
+                  aria-label="Manual terse version"
                   value={manualText}
                   onChange={(e) => onEdit(e.target.value)}
                   className="min-h-[200px]"
@@ -172,7 +174,12 @@ export function AIPreview({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="bg-slate-50 p-4 rounded-md min-h-[200px] max-h-[400px] overflow-y-auto">
+                <div
+                  className="bg-slate-50 p-4 rounded-md min-h-[200px] max-h-[400px] overflow-y-auto"
+                  role="status"
+                  aria-live="polite"
+                  aria-busy={isConverting}
+                >
                   <pre className="whitespace-pre-wrap font-sans text-sm">
                     {conversionResult?.terseText || (
                       <span className="text-muted-foreground italic">

@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -292,15 +292,19 @@ function buildPaltMilestones(contract: ActiveContractDetails) {
 function FieldHintLabel({
   label,
   hint,
+  controlId,
   dataTour,
 }: {
   label: string;
   hint: string;
+  controlId: string;
   dataTour?: string;
 }) {
   return (
     <div className="mb-1 flex items-center gap-1.5" data-tour={dataTour}>
-      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <Label htmlFor={controlId} className="text-xs font-medium text-slate-500">
+        {label}
+      </Label>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -424,7 +428,6 @@ export function ContractUpdateCards({
   deadlineOverrideEnabled = false,
   userRole = "contributor", // "contributor" or "overseer"; default to contributor for demo
 }: ContractUpdateCardsProps & { userRole?: "contributor" | "overseer" }) {
-  const router = useRouter();
   const visibleContracts = useMemo(
     () =>
       userRole === "contributor"
@@ -453,13 +456,11 @@ export function ContractUpdateCards({
   );
 
   function canEditDraft(draft: DraftState): boolean {
-    if (draft.reviewSubmissionId) {
-      // Always allow opening existing submissions in Edit mode first.
-      // Server-side rules still enforce whether an update can be saved.
-      return true;
+    if (!submissionsEnabled) {
+      return false;
     }
 
-    return submissionsEnabled && (submissionWindowOpen || schedulingOverrideActive);
+    return submissionWindowOpen || schedulingOverrideActive || Boolean(draft.reopenedAfterDeadline);
   }
 
   const initialDrafts = useMemo<Record<string, DraftState>>(
@@ -467,6 +468,10 @@ export function ContractUpdateCards({
       Object.fromEntries(
         visibleContracts.map((contract) => {
           const currentCycleEntry = contract.history.find((entry) => {
+            if (entry.periodId) {
+              return entry.periodId === currentPeriod.id;
+            }
+
             const submittedAt = new Date(entry.submittedAt);
             return submittedAt >= currentPeriod.start && submittedAt <= currentPeriod.end;
           });
@@ -874,7 +879,7 @@ export function ContractUpdateCards({
       return;
     }
 
-    if (!submissionsEnabled && !currentDraft.reviewSubmissionId) {
+    if (!submissionsEnabled) {
       return;
     }
 
@@ -952,7 +957,6 @@ export function ContractUpdateCards({
           },
         }));
 
-        router.refresh();
       } catch (error) {
         console.error(error);
         setDrafts((prev) => ({
@@ -1168,6 +1172,7 @@ export function ContractUpdateCards({
                   <FieldHintLabel
                     label="Status"
                     hint="Pick the overall severity of this update: NORMAL for stable progress, RISK for concerns, CRITICAL for urgent issues."
+                    controlId={`${contract.id}-${lineItem.id}-status`}
                     dataTour={isFirstCard && index === 0 ? "submit-card-basic-status" : undefined}
                   />
                   <Select
@@ -1177,7 +1182,7 @@ export function ContractUpdateCards({
                       patchLineItem(contract.id, lineItem.id, { status: value as LineItemStatus })
                     }
                   >
-                    <SelectTrigger className="bg-white text-slate-900">
+                    <SelectTrigger id={`${contract.id}-${lineItem.id}-status`} className="bg-white text-slate-900">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1201,9 +1206,11 @@ export function ContractUpdateCards({
             <FieldHintLabel
               label="Line Item Details"
               hint="Summarize weekly progress, blockers, and planned next steps for this line item."
+              controlId={`${contract.id}-${lineItem.id}-details`}
               dataTour={isFirstCard && index === 0 ? "submit-card-basic-text" : undefined}
             />
             <Textarea
+              id={`${contract.id}-${lineItem.id}-details`}
               value={lineItem.text}
               placeholder={index === 0 ? contract.currentUpdatePlaceholder : "Add another line item."}
               className="min-h-[110px] resize-y border-slate-400 bg-white text-slate-900 shadow-sm"
@@ -1242,6 +1249,7 @@ export function ContractUpdateCards({
             <FieldHintLabel
               label="Status"
               hint="Choose severity for the entire weekly narrative: NORMAL for on-track work, RISK for caution, CRITICAL for urgent attention."
+              controlId={`${contract.id}-simple-status`}
               dataTour={isFirstCard ? "submit-card-simple-status" : undefined}
             />
             <Select
@@ -1251,7 +1259,7 @@ export function ContractUpdateCards({
                 patchSimpleDraft(contract.id, { simpleStatus: value as LineItemStatus })
               }
             >
-              <SelectTrigger className="bg-white text-slate-900">
+              <SelectTrigger id={`${contract.id}-simple-status`} className="bg-white text-slate-900">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -1272,10 +1280,12 @@ export function ContractUpdateCards({
         <FieldHintLabel
           label="Weekly Update Text"
           hint="Write one concise narrative that covers progress, blockers, and what comes next for this contract this week."
+          controlId={`${contract.id}-simple-text`}
           dataTour={isFirstCard ? "submit-card-simple-text" : undefined}
         />
 
         <Textarea
+          id={`${contract.id}-simple-text`}
           value={draft.simpleText}
           placeholder={`Example: ${contract.currentUpdatePlaceholder}`}
           className="min-h-[150px] resize-y border-slate-400 bg-white text-slate-900 shadow-sm"
@@ -1350,6 +1360,7 @@ export function ContractUpdateCards({
                           <FieldHintLabel
                             label="Status"
                             hint="Classify the risk level for this specific line item so reviewers can triage quickly."
+                            controlId={`${contract.id}-${lineItem.id}-detailed-status`}
                             dataTour={isFirstDetailedItem ? "submit-card-detailed-status" : undefined}
                           />
                           <Select
@@ -1359,7 +1370,7 @@ export function ContractUpdateCards({
                               patchLineItem(contract.id, lineItem.id, { status: value as LineItemStatus })
                             }
                           >
-                            <SelectTrigger className="bg-white text-slate-900">
+                            <SelectTrigger id={`${contract.id}-${lineItem.id}-detailed-status`} className="bg-white text-slate-900">
                               <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1373,9 +1384,11 @@ export function ContractUpdateCards({
                           <FieldHintLabel
                             label="Owner"
                             hint="Enter the accountable person or team responsible for resolving or advancing this item."
+                            controlId={`${contract.id}-${lineItem.id}-owner`}
                             dataTour={isFirstDetailedItem ? "submit-card-detailed-owner" : undefined}
                           />
                           <Input
+                            id={`${contract.id}-${lineItem.id}-owner`}
                             value={lineItem.owner}
                             disabled={isDraftLocked}
                             placeholder="Owner"
@@ -1387,9 +1400,11 @@ export function ContractUpdateCards({
                           <FieldHintLabel
                             label="Due Date"
                             hint="Set the expected completion date for this item to help track schedule risk and deadlines."
+                            controlId={`${contract.id}-${lineItem.id}-due-date`}
                             dataTour={isFirstDetailedItem ? "submit-card-detailed-due-date" : undefined}
                           />
                           <Input
+                            id={`${contract.id}-${lineItem.id}-due-date`}
                             type="date"
                             value={lineItem.dueDate}
                             disabled={isDraftLocked}
@@ -1403,13 +1418,16 @@ export function ContractUpdateCards({
                             data-tour={isFirstDetailedItem ? "submit-card-detailed-action-required" : undefined}
                           >
                             <Checkbox
+                              id={`${contract.id}-${lineItem.id}-action-required`}
                               checked={lineItem.actionRequired}
                               disabled={isDraftLocked}
                               onCheckedChange={(checked) =>
                                 patchLineItem(contract.id, lineItem.id, { actionRequired: checked === true })
                               }
                             />
-                            <span>Action required</span>
+                            <Label htmlFor={`${contract.id}-${lineItem.id}-action-required`} className="text-xs font-normal">
+                              Action required
+                            </Label>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -1432,13 +1450,16 @@ export function ContractUpdateCards({
                             data-tour={isFirstDetailedItem ? "submit-card-detailed-line-carry-forward" : undefined}
                           >
                             <Checkbox
+                              id={`${contract.id}-${lineItem.id}-carry-forward`}
                               checked={lineItem.carryForward}
                               disabled={isDraftLocked}
                               onCheckedChange={(checked) =>
                                 patchLineItem(contract.id, lineItem.id, { carryForward: checked === true })
                               }
                             />
-                            <span>Carry forward</span>
+                            <Label htmlFor={`${contract.id}-${lineItem.id}-carry-forward`} className="text-xs font-normal">
+                              Carry forward
+                            </Label>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -1462,10 +1483,12 @@ export function ContractUpdateCards({
                       <FieldHintLabel
                         label="Line Item Details"
                         hint="Describe what changed, current impact, and what will happen next so reviewers have complete context."
+                        controlId={`${contract.id}-${lineItem.id}-detailed-text`}
                         dataTour={isFirstDetailedItem ? "submit-card-detailed-text" : undefined}
                       />
 
                       <Textarea
+                        id={`${contract.id}-${lineItem.id}-detailed-text`}
                         value={lineItem.text}
                         placeholder={contract.currentUpdatePlaceholder}
                         className="min-h-[110px] resize-y border-slate-400 bg-white text-slate-900 shadow-sm"
@@ -1742,7 +1765,7 @@ export function ContractUpdateCards({
                         type="button"
                         data-tour={isFirstCard ? "submit-card-submit-button" : undefined}
                         onClick={() => submitContract(contract.id)}
-                        disabled={(!submissionsEnabled && !draft.reviewSubmissionId) || !hasDraftContent}
+                        disabled={!submissionsEnabled || !hasDraftContent}
                       >
                         {draft.reviewSubmissionId ? "Update" : "Submit"}
                       </Button>

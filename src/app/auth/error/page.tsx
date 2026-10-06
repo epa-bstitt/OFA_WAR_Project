@@ -38,11 +38,11 @@ export default function AuthErrorPage({ searchParams }: AuthErrorPageProps) {
   const errorMessage = getErrorMessage(error);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+    <main id="main-content" className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold text-red-600">
-            Authentication Error
+          <CardTitle asChild className="text-2xl font-bold text-red-600">
+            <h1>Authentication Error</h1>
           </CardTitle>
           <CardDescription>
             {siteConfig.name}
@@ -64,6 +64,6 @@ export default function AuthErrorPage({ searchParams }: AuthErrorPageProps) {
           </Link>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

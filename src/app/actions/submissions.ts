@@ -8,7 +8,6 @@ import { submissionSchema, SubmissionInput, sanitizeRawText } from "@/lib/valida
 import { getCurrentBiWeek } from "@/lib/date-utils";
 import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
 import { getContractsOutlook } from "@/lib/mock-contracts";
-import { cookies } from "next/headers";
 
 // Types matching Prisma schema
 export interface Review {
@@ -39,43 +38,6 @@ export interface Submission {
 export type SubmissionWithReviews = Submission & {
   reviews?: Review[];
 };
-
-// Mock submissions for demo mode
-const mockSubmissions: SubmissionWithReviews[] = [
-  {
-    id: "mock-sub-1",
-    rawText: "Completed API integration and fixed authentication bugs.",
-    terseText: "API integration complete; auth bugs fixed.",
-    status: "APPROVED",
-    createdAt: new Date("2024-02-19"),
-    updatedAt: new Date("2024-02-19"),
-    aiConfidence: 0.92,
-    userId: "demo-contributor",
-    weekOf: new Date("2024-02-19"),
-    isAiGenerated: true,
-    reviews: [],
-    deletedAt: null,
-  },
-  {
-    id: "mock-sub-2",
-    rawText: "Attended team meeting and reviewed PRs.",
-    terseText: "Team meeting attended; PRs reviewed.",
-    status: "IN_REVIEW",
-    createdAt: new Date("2024-02-18"),
-    updatedAt: new Date("2024-02-18"),
-    aiConfidence: 0.88,
-    userId: "demo-contributor",
-    weekOf: new Date("2024-02-18"),
-    isAiGenerated: true,
-    reviews: [],
-    deletedAt: null,
-  },
-];
-
-function isMockModeEnabled(): boolean {
-  const cookieStore = cookies();
-  return cookieStore.get("admin-mock-mode")?.value === "true";
-}
 
 /**
  * Server Action: Submit WAR
@@ -272,7 +234,6 @@ export async function getMySubmissions(
 
 /**
  * Server Action: Get a single submission by ID
- * Supports mock mode for demo submissions
  */
 export async function getSubmissionById(
   id: string
@@ -281,14 +242,6 @@ export async function getSubmissionById(
   | { success: false; error: string }
 > {
   try {
-    // Check for mock mode and mock submission IDs
-    if (isMockModeEnabled() && id.startsWith("mock-sub-")) {
-      const mockSubmission = mockSubmissions.find((sub) => sub.id === id);
-      if (mockSubmission) {
-        return { success: true, submission: mockSubmission };
-      }
-    }
-
     const session = await auth();
     if (!session?.user?.id) {
       return { success: false, error: "Not authenticated" };

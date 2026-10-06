@@ -131,6 +131,7 @@ export async function updateUserRole(
       where: { id: userId },
       data: {
         role: newRole,
+        sessionVersion: { increment: 1 },
         updatedAt: new Date(),
       },
     });
@@ -201,6 +202,7 @@ export async function disableUser(
       where: { id: userId },
       data: {
         isActive: false,
+        sessionVersion: { increment: 1 },
         updatedAt: new Date(),
       },
     });
@@ -259,6 +261,7 @@ export async function enableUser(
       where: { id: userId },
       data: {
         isActive: true,
+        sessionVersion: { increment: 1 },
         updatedAt: new Date(),
       },
     });

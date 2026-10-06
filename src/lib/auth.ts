@@ -1,8 +1,9 @@
 import NextAuth from "next-auth";
 import AzureADB2C from "next-auth/providers/azure-ad-b2c";
 import Credentials from "next-auth/providers/credentials";
-import type { Session } from "next-auth";
-import { cookies } from "next/headers";
+import { resolveSsoUser } from "@/lib/auth-users";
+import { prisma } from "@/lib/db";
+import { isEpaEmail, normalizeLoginEmail, verifyPassword } from "@/lib/password";
 
 const authSecret =
   process.env.AUTH_SECRET ??
@@ -27,10 +28,10 @@ function buildLoginGovProvider() {
   return {
     id: "logingov",
     name: "Login.gov",
-    type: "oidc",
+    type: "oidc" as const,
     clientId: loginGovClientId!,
-    clientSecret: loginGovClientSecret,
-    issuer: loginGovIssuer,
+    clientSecret: loginGovClientSecret!,
+    issuer: loginGovIssuer!,
     authorization: {
       params: {
         scope: process.env.LOGIN_GOV_SCOPE ?? "openid email profile",
@@ -50,56 +51,8 @@ function buildLoginGovProvider() {
         name: fullName || null,
         email: String(profile.email ?? ""),
         image: null,
-        role: "CONTRIBUTOR",
-        azureAdId: subject,
       };
     },
-  };
-}
-
-const isDemoAuthEnabled =
-  process.env.ENABLE_DEMO_AUTH === "true" ||
-  (process.env.NODE_ENV !== "production" && process.env.ENABLE_DEMO_AUTH !== "false");
-
-const demoUsers: Record<string, { id: string; name: string; email: string; role: string }> = {
-  contributor: {
-    id: "demo-contributor",
-    name: "Demo Contributor",
-    email: "demo.contributor@epa.gov",
-    role: "CONTRIBUTOR",
-  },
-  aggregator: {
-    id: "demo-aggregator",
-    name: "Demo Aggregator",
-    email: "aggregator@demo.epa.gov",
-    role: "AGGREGATOR",
-  },
-  overseer: {
-    id: "demo-overseer",
-    name: "Demo Program Overseer",
-    email: "overseer@demo.epa.gov",
-    role: "PROGRAM_OVERSEER",
-  },
-  admin: {
-    id: "demo-admin",
-    name: "Demo Administrator",
-    email: "admin@demo.epa.gov",
-    role: "ADMINISTRATOR",
-  },
-};
-
-function getDemoSession(roleKey: string): Session {
-  const user = demoUsers[roleKey] ?? demoUsers.contributor;
-
-  return {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      azureAdId: user.id,
-    },
-    expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   };
 }
 
@@ -109,30 +62,42 @@ const {
 } = NextAuth({
   secret: authSecret,
   providers: [
-    // Demo credentials provider for testing
-    ...(isDemoAuthEnabled ? [Credentials({
-      id: "demo",
-      name: "Demo Login",
+    Credentials({
+      id: "credentials",
+      name: "EPA Account",
       credentials: {
-        role: { label: "Role", type: "text" },
+        email: { label: "EPA email", type: "email" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const role = credentials?.role?.toLowerCase() || "contributor";
-        const user = demoUsers[role];
+        const email = normalizeLoginEmail(String(credentials?.email ?? ""));
+        const password = String(credentials?.password ?? "");
 
-        if (user) {
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            azureAdId: user.id,
-          };
+        if (!isEpaEmail(email) || !password) {
+          return null;
         }
 
-        return null;
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user?.isActive || !user.passwordHash) {
+          return null;
+        }
+
+        const passwordMatches = await verifyPassword(password, user.passwordHash);
+        if (!passwordMatches) return null;
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          azureAdId: user.azureAdId,
+          mustChangePassword: user.mustChangePassword,
+          sessionVersion: user.sessionVersion,
+          isActive: user.isActive,
+        };
       },
-    })] : []),
+    }),
     ...(isLoginGovConfigured
       ? [
           buildLoginGovProvider(),
@@ -154,27 +119,67 @@ const {
           name: profile.name,
           email: profile.emails?.[0] ?? "",
           image: null,
-          role: (profile as { extension_role?: string }).extension_role ?? "CONTRIBUTOR",
-          azureAdId: profile.oid,
         };
       },
     })] : []),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (!account || account.provider === "credentials") return true;
+      if (account.provider !== "logingov" && account.provider !== "azure-ad-b2c") {
+        return false;
+      }
+
+      const databaseUser = await resolveSsoUser(
+        account.provider,
+        account.providerAccountId,
+        user.email ?? "",
+        user.name
+      );
+
+      if (!databaseUser) return false;
+
+      user.id = databaseUser.id;
+      user.role = databaseUser.role;
+      user.azureAdId = databaseUser.azureAdId;
+      user.mustChangePassword = databaseUser.mustChangePassword;
+      user.sessionVersion = databaseUser.sessionVersion;
+      user.isActive = databaseUser.isActive;
+      return true;
+    },
     async jwt({ token, user }) {
-      // For demo credentials provider, user is returned directly
       if (user) {
         token.sub = user.id;
-        token.role = user.role ?? "CONTRIBUTOR";
-        token.azureAdId = user.azureAdId ?? user.id;
       }
+
+      if (!token.sub) return token;
+
+      const databaseUser = await prisma.user.findUnique({
+        where: { id: token.sub },
+        select: {
+          role: true,
+          azureAdId: true,
+          mustChangePassword: true,
+          sessionVersion: true,
+          isActive: true,
+        },
+      });
+
+      token.role = databaseUser?.role;
+      token.azureAdId = databaseUser?.azureAdId;
+      token.mustChangePassword = databaseUser?.mustChangePassword ?? false;
+      token.sessionVersion = databaseUser?.sessionVersion ?? 0;
+      token.isActive = databaseUser?.isActive ?? false;
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub!;
         session.user.role = (token.role as string) ?? "CONTRIBUTOR";
-        session.user.azureAdId = (token.azureAdId as string) ?? token.sub!;
+        session.user.azureAdId = (token.azureAdId as string | null) ?? null;
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
+        session.user.sessionVersion = Number(token.sessionVersion ?? 0);
+        session.user.isActive = Boolean(token.isActive);
       }
       return session;
     },
@@ -190,31 +195,7 @@ const {
 });
 
 export const { GET, POST } = handlers;
-
-export async function auth(...args: Parameters<typeof baseAuth>) {
-  const session = await baseAuth(...args);
-
-  if (isDemoAuthEnabled && args.length === 0) {
-    const cookieStore = cookies();
-    const isMockMode = cookieStore.get("admin-mock-mode")?.value === "true";
-
-    if (isMockMode) {
-      const selectedRole =
-        cookieStore.get("admin-mock-role")?.value?.toLowerCase() || "contributor";
-      return getDemoSession(selectedRole);
-    }
-  }
-
-  if (session) {
-    return session;
-  }
-
-  if (args.length > 0) {
-    return null;
-  }
-
-  return null;
-}
+export const auth = baseAuth;
 
 // Role-based access control helper
 export function hasRequiredRole(

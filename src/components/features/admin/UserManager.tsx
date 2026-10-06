@@ -224,6 +224,7 @@ export function UserManager({
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search users"
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -231,7 +232,7 @@ export function UserManager({
           />
         </div>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px]" aria-label="Filter users by role">
             <SelectValue placeholder="Filter by role" />
           </SelectTrigger>
           <SelectContent>
@@ -244,7 +245,7 @@ export function UserManager({
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px]" aria-label="Filter users by status">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
@@ -362,9 +363,9 @@ export function UserManager({
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>New Role</Label>
+              <Label htmlFor="user-new-role">New Role</Label>
               <Select value={newRole} onValueChange={setNewRole}>
-                <SelectTrigger>
+                <SelectTrigger id="user-new-role">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -400,8 +401,9 @@ export function UserManager({
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Reason (optional)</Label>
+              <Label htmlFor="disable-user-reason">Reason (optional)</Label>
               <Textarea
+                id="disable-user-reason"
                 placeholder="Enter reason for disabling this user..."
                 value={disableReason}
                 onChange={(e) => setDisableReason(e.target.value)}

@@ -21,9 +21,14 @@ export function Loading({
   className,
 }: LoadingProps) {
   const content = (
-    <div className={cn("flex flex-col items-center justify-center gap-3", className)}>
+    <div
+      className={cn("flex flex-col items-center justify-center gap-3", className)}
+      role="status"
+      aria-live="polite"
+    >
       <Loader2
         className={cn("animate-spin text-[#005ea2]", sizeClasses[size])}
+        aria-hidden="true"
       />
       {text && <p className="text-sm text-slate-600">{text}</p>}
     </div>

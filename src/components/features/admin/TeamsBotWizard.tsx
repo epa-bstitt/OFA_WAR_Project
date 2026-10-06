@@ -218,9 +218,10 @@ choco install ngrok
         <h4 className="font-medium">Step 2: Collect Application Details</h4>
         <div className="space-y-3">
           <div>
-            <Label>Application (client) ID</Label>
+            <Label htmlFor="teams-client-id">Application (client) ID</Label>
             <div className="flex gap-2">
               <Input 
+                id="teams-client-id"
                 value={config.botId}
                 onChange={(e) => setConfig({...config, botId: e.target.value})}
                 placeholder="Paste from Azure Portal Overview page"
@@ -229,6 +230,7 @@ choco install ngrok
                 <Button 
                   variant="outline" 
                   size="icon"
+                  aria-label="Copy application client ID"
                   onClick={() => copyToClipboard(config.botId, "Client ID")}
                 >
                   {copiedField === "Client ID" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -238,9 +240,10 @@ choco install ngrok
           </div>
 
           <div>
-            <Label>Directory (tenant) ID</Label>
+            <Label htmlFor="teams-tenant-id">Directory (tenant) ID</Label>
             <div className="flex gap-2">
               <Input 
+                id="teams-tenant-id"
                 value={config.tenantId}
                 onChange={(e) => setConfig({...config, tenantId: e.target.value})}
                 placeholder="Paste from Azure Portal Overview page"
@@ -302,9 +305,10 @@ choco install ngrok
         <h4 className="font-medium">Configure Messaging Endpoint</h4>
         <div className="space-y-3">
           <div>
-            <Label>Messaging Endpoint URL</Label>
+            <Label htmlFor="teams-messaging-endpoint">Messaging Endpoint URL</Label>
             <div className="flex gap-2">
               <Input 
+                id="teams-messaging-endpoint"
                 value={config.messagingEndpoint}
                 onChange={(e) => setConfig({...config, messagingEndpoint: e.target.value})}
                 placeholder="https://your-domain.com/api/webhooks/teams"
@@ -312,6 +316,7 @@ choco install ngrok
               <Button 
                 variant="outline" 
                 size="icon"
+                aria-label="Copy messaging endpoint URL"
                 onClick={() => copyToClipboard(config.messagingEndpoint, "Messaging Endpoint")}
               >
                 {copiedField === "Messaging Endpoint" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -361,14 +366,15 @@ choco install ngrok
         <h4 className="font-medium">Get Bot Credentials</h4>
         <div className="space-y-3">
           <div>
-            <Label>Microsoft App ID</Label>
-            <Input value={config.botId || "(from Azure Portal)"} readOnly />
+            <Label htmlFor="teams-app-id">Microsoft App ID</Label>
+            <Input id="teams-app-id" value={config.botId || "(from Azure Portal)"} readOnly />
           </div>
 
           <div>
-            <Label>Client Secret (App Password)</Label>
+            <Label htmlFor="teams-client-secret">Client Secret (App Password)</Label>
             <div className="flex gap-2">
               <Input 
+                id="teams-client-secret"
                 type="password"
                 value={config.botPassword}
                 onChange={(e) => setConfig({...config, botPassword: e.target.value})}

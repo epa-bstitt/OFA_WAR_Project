@@ -245,6 +245,7 @@ export function PublishPanel({
                       <tr>
                         <th className="w-12 p-3">
                           <Checkbox
+                            aria-label="Select all approved submissions"
                             checked={
                               approvedSubmissions.length > 0 &&
                               approvedSubmissions.every((s) => selectedIds.has(s.id))
@@ -263,6 +264,7 @@ export function PublishPanel({
                         <tr key={submission.id} className="border-t">
                           <td className="p-3">
                             <Checkbox
+                              aria-label={`Select approved submission from ${submission.user.name || submission.user.email}`}
                               checked={selectedIds.has(submission.id)}
                               onCheckedChange={() => toggleSelection(submission.id)}
                               disabled={submission.status === "PUBLISHED"}

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getCurrentSubmissionPeriod, isSubmissionWindowOpen } from "@/lib/submission-periods";
 import { getStoredSettings } from "@/app/api/admin/settings/store";
 import { getOverseerSettings } from "@/lib/overseer-settings";
+import { isJakeBejaUser } from "@/lib/work-modes";
 import {
   buildContributorEmail,
   isPlaceholderContributorEmail,
@@ -44,9 +45,6 @@ const DEFAULT_IMAGE_URL =
   "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80";
 const DEFAULT_IMAGE_ALT = "Contract and acquisition planning documents on an office desk.";
 const DEFAULT_CATEGORY = "Current and Active Contracts/Purchase Order Outlook";
-const DEMO_CONTRIBUTOR_ID = "demo-contributor";
-const DEMO_CONTRIBUTOR_NAME = "Contributor";
-const DEMO_CONTRIBUTOR_EMAIL = buildContributorEmail(DEMO_CONTRIBUTOR_NAME, DEMO_CONTRIBUTOR_ID);
 
 function toIsoDate(value: Date) {
   return value.toISOString().slice(0, 10);
@@ -165,9 +163,12 @@ function mapSubmissionToWarEntry(submission: {
   rawText: string;
   status: string;
 }): MockContractSubmission {
+  const period = getCurrentSubmissionPeriod(submission.weekOf);
+
   return {
     id: submission.id,
-    weekOf: toWeekLabel(submission.weekOf),
+    periodId: period.id,
+    weekOf: toWeekLabel(period.deadline),
     submittedAt: toIsoDate(submission.createdAt),
     status: submission.status === "APPROVED" ? "APPROVED" : "IN_REVIEW",
     summary: submission.rawText,
@@ -252,7 +253,7 @@ async function ensureUserRecord(userId: string, name?: string | null, email?: st
       email: nextEmail,
       name: nextName,
       azureAdId: normalizedId,
-      role: "CONTRIBUTOR",
+      ...(isJakeBejaUser(normalizedId, nextEmail) ? { role: "AGGREGATOR" } : {}),
       isActive: true,
     },
     create: {
@@ -306,7 +307,11 @@ async function seedIfEmpty() {
     }
 
     for (const history of contract.history) {
-      const historyUserId = primaryAssigneeId ?? "demo-contributor";
+      if (!primaryAssigneeId) {
+        continue;
+      }
+
+      const historyUserId = primaryAssigneeId;
       await ensureUserRecord(historyUserId, historyUserId, null);
       const createdAt = new Date(history.submittedAt);
       await prisma.submission.create({
@@ -325,13 +330,8 @@ async function seedIfEmpty() {
   }
 }
 
-async function ensureDemoContributorData() {
-  await ensureUserRecord(DEMO_CONTRIBUTOR_ID, DEMO_CONTRIBUTOR_NAME, DEMO_CONTRIBUTOR_EMAIL);
-}
-
 async function fetchContracts() {
   await seedIfEmpty();
-  await ensureDemoContributorData();
 
   const projects = await prisma.project.findMany({
     where: {
@@ -439,7 +439,7 @@ export async function getContractsOutlookFromDb(): Promise<MockContract[]> {
 
 export async function getMockContractsForUserFromDb(userId: string): Promise<MockContract[]> {
   const contracts = await fetchContracts();
-  if (userId === "demo-admin" || userId === "demo-overseer" || userId === "demo-aggregator") {
+  if (userId === "demo-admin" || userId === "demo-overseer") {
     return contracts;
   }
 
@@ -633,13 +633,19 @@ export async function upsertWarSubmissionForContract(params: {
   const session = await auth();
   await ensureUserRecord(params.userId, session?.user?.name ?? null, session?.user?.email ?? null);
 
-  const currentPeriod = getCurrentSubmissionPeriod();
-  const weekOf = new Date(currentPeriod.start);
   const now = new Date();
+  const currentPeriod = getCurrentSubmissionPeriod(now);
+  const weekOf = now;
   const submissionWindowOpen = isSubmissionWindowOpen(now);
   const storedSettings = await getStoredSettings();
-  const deadlineOverrideEnabled = getOverseerSettings(storedSettings).contributorAccess.deadlineOverrideEnabled;
-  weekOf.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  const contributorAccess = getOverseerSettings(storedSettings).contributorAccess;
+  const deadlineOverrideEnabled = contributorAccess.deadlineOverrideEnabled;
+
+  if (!contributorAccess.submissionEnabled) {
+    throw new Error(
+      "SUBMISSION_LOCKED:Contributor submissions are currently locked by the Program Overseer."
+    );
+  }
 
   let submission = null;
 

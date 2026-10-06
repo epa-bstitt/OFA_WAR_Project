@@ -9,7 +9,7 @@ applications:
     instances: 1
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      ENABLE_DEMO_AUTH: "true"
+      ENABLE_DEMO_AUTH: "false"
       NEXTAUTH_URL: https://epa-business-platform.app.cloud.gov
       NPM_CONFIG_PRODUCTION: "true"
     services:

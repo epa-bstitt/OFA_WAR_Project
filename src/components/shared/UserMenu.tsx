@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,12 +9,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { Role } from "@/config/navigation";
+import { WORK_MODE_COOKIE, WORK_MODE_LABELS, isJakeBejaUser } from "@/lib/work-modes";
+import { useWorkMode } from "./WorkModeProvider";
 
 const roleColors: Record<string, string> = {
   CONTRIBUTOR: "bg-blue-100 text-blue-800",
@@ -31,60 +35,16 @@ const roleLabels: Record<string, string> = {
   ADMINISTRATOR: "Administrator",
 };
 
-const demoUsers: Record<string, { name: string; email: string; role: string }> = {
-  contributor: {
-    name: "Demo Contributor",
-    email: "demo.contributor@epa.gov",
-    role: "CONTRIBUTOR",
-  },
-  aggregator: {
-    name: "Demo Aggregator",
-    email: "aggregator@demo.epa.gov",
-    role: "AGGREGATOR",
-  },
-  overseer: {
-    name: "Demo Program Overseer",
-    email: "overseer@demo.epa.gov",
-    role: "PROGRAM_OVERSEER",
-  },
-  admin: {
-    name: "Demo Administrator",
-    email: "admin@demo.epa.gov",
-    role: "ADMINISTRATOR",
-  },
-};
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
 export function UserMenu() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const [demoRole, setDemoRole] = useState<string>("contributor");
-  const [isMockMode, setIsMockMode] = useState(false);
+  const { workMode, allowedModes, selectWorkMode } = useWorkMode();
 
-  useEffect(() => {
-    const cookieRole = getCookie("admin-mock-role")?.toLowerCase();
-    setIsMockMode(getCookie("admin-mock-mode") === "true");
-    if (cookieRole && demoUsers[cookieRole]) {
-      setDemoRole(cookieRole);
+  async function handleSignOut() {
+    if (isJakeBejaUser(user?.id, user?.email)) {
+      document.cookie = `${WORK_MODE_COOKIE}=; Max-Age=0; path=/; SameSite=Lax`;
     }
-  }, []);
-
-  function clearCookie(name: string) {
-    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
-  }
-
-  async function handleSwitchRole() {
     await signOut({ redirect: false });
-    clearCookie("admin-mock-role");
-    clearCookie("admin-mock-mode");
     router.push("/login");
     router.refresh();
   }
@@ -98,13 +58,13 @@ export function UserMenu() {
     );
   }
 
-  const user = isMockMode ? demoUsers[demoRole] : (session?.user ?? demoUsers[demoRole]);
+  const user = session?.user;
 
   if (!user) {
     return null;
   }
 
-  const role = user.role as string;
+  const role = workMode;
   const initials = user.name
     ?.split(" ")
     .map((n) => n[0])
@@ -138,6 +98,19 @@ export function UserMenu() {
             </Badge>
           </div>
         </DropdownMenuLabel>
+        {allowedModes.length > 1 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Work mode</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={workMode} onValueChange={(value) => selectWorkMode(value as Role)}>
+              {allowedModes.map((mode) => (
+                <DropdownMenuRadioItem key={mode} value={mode}>
+                  {WORK_MODE_LABELS[mode]}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <a href="#profile" className="cursor-pointer">
@@ -152,9 +125,9 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-red-600 focus:text-red-600 cursor-pointer"
-          onClick={handleSwitchRole}
+          onClick={handleSignOut}
         >
-          Switch Role
+          Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

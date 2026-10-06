@@ -187,7 +187,11 @@ export function ReviewQueue({ submissions, onQuickAction }: ReviewQueueProps) {
                         )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Actions for submission from ${submission.user.name || submission.user.email || "unknown user"}`}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>

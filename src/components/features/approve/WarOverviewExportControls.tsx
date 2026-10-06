@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useRef } from "react";
-import { Download, Settings2 } from "lucide-react";
+import { Download, Loader2, Settings2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -31,6 +32,7 @@ interface WarOverviewExportControlsProps {
 export function WarOverviewExportControls({ contracts, currentPeriodId }: WarOverviewExportControlsProps) {
 
   const [open, setOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [includeSections, setIncludeSections] = useState<{ [key: string]: boolean }>({
     recompetes: true,
     outlook: true,
@@ -121,25 +123,49 @@ export function WarOverviewExportControls({ contracts, currentPeriodId }: WarOve
   }
 
 
-  function downloadExport() {
+  async function downloadExport() {
     const includeCategories = Object.keys(includeSections).filter(cat => includeSections[cat]);
-    if (includeCategories.length === 0 || selectedContractIds.length === 0) {
+    if (includeCategories.length === 0 || selectedContractIds.length === 0 || isDownloading) {
       return;
     }
+
     const params = new URLSearchParams();
     params.set("includeCategories", includeCategories.join(","));
     params.set("contractIds", selectedContractIds.join(","));
-    window.location.assign(`/api/approve/export-war-overview?${params.toString()}`);
-    // Reset all selections after export
-    setTimeout(() => {
+
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/approve/export-war-overview?${params.toString()}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "The Word export could not be generated.");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `war-overview-${currentPeriodId}.docx`;
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+
       setIncludeSections({ recompetes: true, outlook: true });
       contractSelectionRef.current = {
         recompetes: new Set(contracts.filter(c => c.category === "recompetes").map(c => c.id)),
         outlook: new Set(contracts.filter(c => c.category === "outlook").map(c => c.id)),
       };
       setSelectedContractIds(contracts.map(c => c.id));
-    }, 300);
-    setOpen(false);
+      setOpen(false);
+      toast.success("Word export downloaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The Word export could not be generated.");
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   // Reset all selections when modal closes
@@ -281,10 +307,14 @@ export function WarOverviewExportControls({ contracts, currentPeriodId }: WarOve
           <Button
             type="button"
             onClick={downloadExport}
-            disabled={selectedContractIds.length === 0 || !Object.values(includeSections).some(Boolean)}
+            disabled={isDownloading || selectedContractIds.length === 0 || !Object.values(includeSections).some(Boolean)}
           >
-            <Download className="mr-1.5 h-4 w-4" />
-            Download Word (.docx) Export
+            {isDownloading ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-1.5 h-4 w-4" />
+            )}
+            {isDownloading ? "Preparing Word Export..." : "Download Word (.docx) Export"}
           </Button>
         </DialogFooter>
       </DialogContent>

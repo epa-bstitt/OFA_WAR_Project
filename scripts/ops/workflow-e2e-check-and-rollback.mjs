@@ -101,16 +101,11 @@ async function main() {
   const now = new Date();
   const period = getCurrentSubmissionPeriod(now);
 
-  const contributor =
-    (await prisma.user.findUnique({
-      where: { id: "demo-contributor" },
-      select: { id: true, email: true, name: true },
-    })) ||
-    (await prisma.user.findFirst({
-      where: { role: "CONTRIBUTOR", isActive: true },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, email: true, name: true },
-    }));
+  const contributor = await prisma.user.findFirst({
+    where: { role: "CONTRIBUTOR", isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, email: true, name: true },
+  });
 
   const overseer =
     (await prisma.user.findUnique({

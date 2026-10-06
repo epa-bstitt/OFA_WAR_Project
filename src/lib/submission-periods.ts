@@ -121,6 +121,22 @@ function getWindowOpenByOffset(offset: number): Date {
   );
 }
 
+function getPeriodOpenByOffset(offset: number): Date {
+  const etDate = getEtDateByOffset(offset);
+  const deadlineDate = new Date(Date.UTC(etDate.year, etDate.month - 1, etDate.day));
+  deadlineDate.setUTCDate(deadlineDate.getUTCDate() - 1);
+
+  return zonedDateTimeToUtc(
+    deadlineDate.getUTCFullYear(),
+    deadlineDate.getUTCMonth() + 1,
+    deadlineDate.getUTCDate(),
+    20,
+    0,
+    0,
+    SUBMISSION_TIME_ZONE
+  );
+}
+
 function getPeriodIdByOffset(offset: number): string {
   const etDate = getEtDateByOffset(offset);
   const month = String(etDate.month).padStart(2, "0");
@@ -141,25 +157,21 @@ function getPeriodLabel(deadline: Date): string {
 
 function getCurrentPeriodOffset(now: Date): number {
   const baseOffset = getBiweeklyOffsetForDate(now);
-  const baseWindowOpen = getWindowOpenByOffset(baseOffset);
-  const nextWindowOpen = getWindowOpenByOffset(baseOffset + 1);
+  const nextPeriodOpen = getPeriodOpenByOffset(baseOffset + 1);
 
-  if (now.getTime() < baseWindowOpen.getTime()) {
-    return baseOffset - 1;
-  }
-
-  return now.getTime() < nextWindowOpen.getTime() ? baseOffset : baseOffset + 1;
+  return now.getTime() < nextPeriodOpen.getTime() ? baseOffset : baseOffset + 1;
 }
 
 function buildPeriodForOffset(offset: number): SubmissionPeriod {
   const deadline = getDeadlineByOffset(offset);
-  const previousDeadline = getDeadlineByOffset(offset - 1);
+  const start = getPeriodOpenByOffset(offset);
+  const nextPeriodOpen = getPeriodOpenByOffset(offset + 1);
 
   return {
     id: getPeriodIdByOffset(offset),
     label: getPeriodLabel(deadline),
-    start: new Date(previousDeadline.getTime() + 1),
-    end: new Date(deadline),
+    start,
+    end: new Date(nextPeriodOpen.getTime() - 1),
     deadline: new Date(deadline),
   };
 }
@@ -180,24 +192,8 @@ export function isFirstOrThirdTuesday(date: Date): boolean {
 }
 
 export function isSubmissionWindowOpen(now: Date = new Date()): boolean {
-  if (!isBiweeklySubmissionTuesday(now)) {
-    return false;
-  }
-
-  const zoned = getZonedParts(now, SUBMISSION_TIME_ZONE);
-  const hours = zoned.hour;
-  const minutes = zoned.minute;
-  const seconds = zoned.second;
-
-  if (hours < 8 || hours > 17) {
-    return false;
-  }
-
-  if (hours === 17 && (minutes > 0 || seconds > 0)) {
-    return false;
-  }
-
-  return true;
+  const period = getCurrentSubmissionPeriod(now);
+  return now.getTime() >= period.start.getTime() && now.getTime() <= period.deadline.getTime();
 }
 
 export function isBiweeklyReminderTime(now: Date = new Date()): boolean {

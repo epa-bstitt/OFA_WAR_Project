@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "./auth";
 import type { Session } from "next-auth";
+import { isJakeBejaUser, isBrianStittUser } from "@/lib/work-modes";
 
 /**
  * Get the current authenticated user from the session
@@ -8,7 +9,7 @@ import type { Session } from "next-auth";
  */
 export async function getCurrentUser(): Promise<Session["user"] | null> {
   const session = await auth();
-  return session?.user ?? null;
+  return session?.user?.isActive ? session.user : null;
 }
 
 /**
@@ -57,6 +58,13 @@ export async function requireMinimumRole(
   
   const userLevel = ROLE_HIERARCHY[user.role] || 0;
   const minLevel = ROLE_HIERARCHY[minimumRole] || 0;
+
+  if (
+    (minimumRole === "AGGREGATOR" || minimumRole === "PROGRAM_OVERSEER") &&
+    (isJakeBejaUser(user.id, user.email) || isBrianStittUser(user.id, user.email))
+  ) {
+    return user;
+  }
   
   if (userLevel < minLevel) {
     redirect("/unauthorized");
@@ -92,6 +100,13 @@ export async function hasMinimumRoleLevel(minimumRole: string): Promise<boolean>
   
   const userLevel = ROLE_HIERARCHY[user.role] || 0;
   const minLevel = ROLE_HIERARCHY[minimumRole] || 0;
+
+  if (
+    (minimumRole === "AGGREGATOR" || minimumRole === "PROGRAM_OVERSEER") &&
+    (isJakeBejaUser(user.id, user.email) || isBrianStittUser(user.id, user.email))
+  ) {
+    return true;
+  }
   
   return userLevel >= minLevel;
 }

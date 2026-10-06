@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -10,50 +10,17 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { EPALogo } from "./EPALogo";
 import { UserMenu } from "./UserMenu";
-import { NAV_ITEMS, Role } from "@/config/navigation";
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function mapDemoRoleToAppRole(role: string | null): Role {
-  if (role === "admin") {
-    return "ADMINISTRATOR";
-  }
-
-  if (role === "overseer") {
-    return "PROGRAM_OVERSEER";
-  }
-
-  if (role === "aggregator") {
-    return "AGGREGATOR";
-  }
-
-  return "CONTRIBUTOR";
-}
+import { useWorkMode } from "./WorkModeProvider";
+import { NAV_ITEMS } from "@/config/navigation";
 
 export function Header() {
   const { data: session } = useSession();
+  const { workMode } = useWorkMode();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [demoRole, setDemoRole] = useState<string | null>(null);
-  const [isMockMode, setIsMockMode] = useState(false);
   const pathname = usePathname();
 
-  useEffect(() => {
-    setDemoRole(getCookie("admin-mock-role"));
-    setIsMockMode(getCookie("admin-mock-mode") === "true");
-  }, [pathname]);
-
-  const userRole = isMockMode
-    ? mapDemoRoleToAppRole(demoRole)
-    : ((session?.user?.role as Role) || mapDemoRoleToAppRole(demoRole));
-  const navItems = NAV_ITEMS[userRole] || [];
-  const hasUserContext = Boolean(session?.user) || Boolean(demoRole);
+  const navItems = NAV_ITEMS[workMode] || [];
+  const hasUserContext = Boolean(session?.user);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white">
@@ -62,7 +29,7 @@ export function Header() {
         <EPALogo size="sm" />
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center gap-6">
+        <nav aria-label="Primary" className="hidden lg:flex items-center gap-6">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
@@ -71,6 +38,7 @@ export function Header() {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-2 text-sm font-medium transition-colors hover:text-[#005ea2]",
                   isActive ? "text-[#005ea2]" : "text-slate-600"
@@ -102,7 +70,7 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-64">
-              <nav className="flex flex-col gap-2 mt-8">
+              <nav aria-label="Mobile primary" className="flex flex-col gap-2 mt-8">
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
@@ -111,6 +79,7 @@ export function Header() {
                     <Link
                       key={item.href}
                       href={item.href}
+                      aria-current={isActive ? "page" : undefined}
                       onClick={() => setMobileMenuOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
