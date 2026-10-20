@@ -1,11 +1,23 @@
 import bcrypt from "bcryptjs";
-import { PrismaClient as PostgresPrismaClient } from "@prisma/client";
-import { PrismaClient as SqlitePrismaClient } from "../prisma/generated/sqlite-client/index.js";
+import { getDatabaseUrlFromServices } from "./database-url.cjs";
 
-const PrismaClient = process.env.DATABASE_URL?.startsWith("file:")
-  ? SqlitePrismaClient
-  : PostgresPrismaClient;
-const prisma = new PrismaClient();
+const databaseUrl = process.env.DATABASE_URL ?? getDatabaseUrlFromServices();
+
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is not set and no PostgreSQL service binding was found.");
+}
+
+const { PrismaClient } = databaseUrl.startsWith("file:")
+  ? await import("../prisma/generated/sqlite-client/index.js")
+  : await import("@prisma/client");
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: databaseUrl,
+    },
+  },
+});
 const shouldApply = process.argv.includes("--apply");
 const supportedRoles = new Set([
   "CONTRIBUTOR",
@@ -13,6 +25,36 @@ const supportedRoles = new Set([
   "PROGRAM_OVERSEER",
   "ADMINISTRATOR",
 ]);
+
+async function upsertBrianUser(password) {
+  const email = "stitt.brian@epa.gov";
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  await prisma.user.upsert({
+    where: { email },
+    create: {
+      email,
+      name: "Brian Stitt",
+      role: "CONTRIBUTOR",
+      isActive: true,
+      passwordHash,
+      mustChangePassword: true,
+      passwordChangedAt: null,
+      sessionVersion: 0,
+    },
+    update: {
+      name: "Brian Stitt",
+      role: "CONTRIBUTOR",
+      isActive: true,
+      passwordHash,
+      mustChangePassword: true,
+      passwordChangedAt: null,
+      sessionVersion: { increment: 1 },
+    },
+  });
+
+  console.log("Brian Stitt account is ready for temporary-password login.");
+}
 
 async function main() {
   const temporaryPassword = process.env.INITIAL_USER_PASSWORD;
@@ -55,23 +97,26 @@ async function main() {
 
   if (!shouldApply || users.length === 0) {
     console.log(shouldApply ? "No users required changes." : "No database changes made. Re-run with --apply to proceed.");
-    return;
+  } else {
+    for (const user of users) {
+      const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          mustChangePassword: true,
+          passwordChangedAt: null,
+          sessionVersion: { increment: 1 },
+        },
+      });
+    }
+
+    console.log(`Bootstrapped users: ${users.length}`);
   }
 
-  for (const user of users) {
-    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        mustChangePassword: true,
-        passwordChangedAt: null,
-        sessionVersion: { increment: 1 },
-      },
-    });
+  if (shouldApply && process.env.BOOTSTRAP_BRIAN === "true") {
+    await upsertBrianUser(temporaryPassword);
   }
-
-  console.log(`Bootstrapped users: ${users.length}`);
 }
 
 main()

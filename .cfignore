@@ -1,7 +1,10 @@
 .env
 .env.*
 node_modules
+.next/cache
+prisma/generated
 *.sqlite
 *.sqlite-journal
+*.tmp*
 dist
 coverage

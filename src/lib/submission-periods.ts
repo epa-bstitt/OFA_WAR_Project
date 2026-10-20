@@ -108,19 +108,6 @@ function getDeadlineByOffset(offset: number): Date {
   );
 }
 
-function getWindowOpenByOffset(offset: number): Date {
-  const etDate = getEtDateByOffset(offset);
-  return zonedDateTimeToUtc(
-    etDate.year,
-    etDate.month,
-    etDate.day,
-    8,
-    0,
-    0,
-    SUBMISSION_TIME_ZONE
-  );
-}
-
 function getPeriodOpenByOffset(offset: number): Date {
   const etDate = getEtDateByOffset(offset);
   const deadlineDate = new Date(Date.UTC(etDate.year, etDate.month - 1, etDate.day));

@@ -20,6 +20,7 @@
     "db:repair:orphaned-daycom": "node scripts/repair-orphaned-daycom.mjs",
     "db:bootstrap-users:dry": "node scripts/bootstrap-local-passwords.mjs",
     "db:bootstrap-users": "node scripts/bootstrap-local-passwords.mjs --apply",
+    "bootstrap:brian": "node scripts/bootstrap-brian-stitt.mjs",
     "generate:brief-deck": "node scripts/generate-product-brief-deck.mjs"
   },
   "dependencies": {
