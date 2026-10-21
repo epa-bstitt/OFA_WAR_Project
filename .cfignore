@@ -1,6 +1,8 @@
 .env
 .env.*
 node_modules
+.git
+.github
 .next/cache
 prisma/generated
 *.sqlite

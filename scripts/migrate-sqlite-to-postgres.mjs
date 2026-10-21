@@ -12,6 +12,11 @@ const sourceUrl = process.env.SQLITE_DATABASE_URL ?? `file:${sourcePath.replaceA
 const targetUrl = process.env.TARGET_DATABASE_URL ?? process.env.DATABASE_URL;
 const verifyOnly = process.argv.includes("--verify-only");
 const inventoryOnly = process.argv.includes("--inventory-only");
+const replaceExisting = process.argv.includes("--replace-existing");
+
+if (replaceExisting && (verifyOnly || inventoryOnly || !process.env.EXPECTED_SOURCE_SHA256)) {
+  throw new Error("Replacement requires EXPECTED_SOURCE_SHA256 and cannot run with verification-only flags.");
+}
 
 if (!existsSync(sourcePath)) {
   throw new Error(`SQLite source not found: ${sourcePath}`);
@@ -51,11 +56,11 @@ async function loadRows(client, model) {
   return client[model].findMany({ orderBy: { id: "asc" } });
 }
 
-async function verifyMigration(sourceRows) {
+async function verifyMigration(sourceRows, client = postgres) {
   const failures = [];
 
   for (const model of modelOrder) {
-    const targetRows = await loadRows(postgres, model);
+    const targetRows = await loadRows(client, model);
     const sourceHash = hashRows(sourceRows[model]);
     const targetHash = hashRows(targetRows);
     const matches = sourceRows[model].length === targetRows.length && sourceHash === targetHash;
@@ -112,6 +117,10 @@ try {
   console.log(`SQLite source: ${sourcePath}`);
   console.log(`SQLite SHA-256: ${sqliteChecksum}`);
 
+  if (replaceExisting && sqliteChecksum !== process.env.EXPECTED_SOURCE_SHA256) {
+    throw new Error("SQLite checksum changed since preflight; replacement cancelled.");
+  }
+
   const sourceRows = Object.fromEntries(
     await Promise.all(
       modelOrder.map(async (model) => [model, await loadRows(sqlite, model)]),
@@ -127,7 +136,7 @@ try {
     const targetCounts = await Promise.all(modelOrder.map((model) => postgres[model].count()));
     const nonEmptyModels = modelOrder.filter((_, index) => targetCounts[index] > 0);
 
-    if (nonEmptyModels.length > 0) {
+    if (nonEmptyModels.length > 0 && !replaceExisting) {
       throw new Error(
         `Destination is not empty (${nonEmptyModels.join(", ")}). Use a fresh database or --verify-only.`,
       );
@@ -135,14 +144,22 @@ try {
 
     await postgres.$transaction(
       async (transaction) => {
+        if (replaceExisting) {
+          for (const model of [...modelOrder].reverse()) {
+            await transaction[model].deleteMany();
+          }
+        }
+
         for (const model of modelOrder) {
           const rows = sourceRows[model];
           if (rows.length > 0) {
             await transaction[model].createMany({ data: rows });
           }
         }
+
+        await verifyMigration(sourceRows, transaction);
       },
-      { maxWait: 30_000, timeout: 120_000 },
+      { maxWait: 30_000, timeout: 180_000 },
     );
   }
 

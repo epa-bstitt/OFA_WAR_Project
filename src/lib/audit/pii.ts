@@ -87,6 +87,7 @@ const SENSITIVE_FIELDS = new Set([
 const SAFE_FIELDS = new Set([
   "id",
   "userId",
+  "impersonatedUserId",
   "submissionId",
   "reviewId",
   "promptId",

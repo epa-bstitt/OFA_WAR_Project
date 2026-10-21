@@ -41,13 +41,13 @@ export default function ChangePasswordPage() {
     <main id="main-content" className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle asChild><h1>Change temporary password</h1></CardTitle>
+          <CardTitle asChild><h1>Change password</h1></CardTitle>
           <CardDescription>Choose a new password with at least 12 characters before continuing.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="currentPassword">Temporary password</Label>
+              <Label htmlFor="currentPassword">Current password</Label>
               <PasswordInput id="currentPassword" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required disabled={isLoading} />
             </div>
             <div className="space-y-2">

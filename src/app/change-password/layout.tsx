@@ -12,9 +12,5 @@ export default async function ChangePasswordLayout({
     redirect("/login");
   }
 
-  if (!session.user.mustChangePassword) {
-    redirect("/dashboard");
-  }
-
   return children;
 }

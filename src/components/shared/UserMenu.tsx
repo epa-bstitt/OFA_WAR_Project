@@ -18,8 +18,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/config/navigation";
-import { WORK_MODE_COOKIE, WORK_MODE_LABELS, isJakeBejaUser } from "@/lib/work-modes";
+import { WORK_MODE_COOKIE, WORK_MODE_LABELS } from "@/lib/work-modes";
 import { useWorkMode } from "./WorkModeProvider";
+import { stopImpersonation } from "@/app/actions/admin/impersonation";
 
 const roleColors: Record<string, string> = {
   CONTRIBUTOR: "bg-blue-100 text-blue-800",
@@ -41,9 +42,8 @@ export function UserMenu() {
   const { workMode, allowedModes, selectWorkMode } = useWorkMode();
 
   async function handleSignOut() {
-    if (isJakeBejaUser(user?.id, user?.email)) {
-      document.cookie = `${WORK_MODE_COOKIE}=; Max-Age=0; path=/; SameSite=Lax`;
-    }
+    await stopImpersonation();
+    document.cookie = `${WORK_MODE_COOKIE}=; Max-Age=0; path=/; SameSite=Lax`;
     await signOut({ redirect: false });
     router.push("/login");
     router.refresh();
@@ -112,6 +112,11 @@ export function UserMenu() {
           </>
         )}
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href="/change-password" className="cursor-pointer">
+            Change password
+          </a>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="#profile" className="cursor-pointer">
             Profile

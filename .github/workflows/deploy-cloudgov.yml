@@ -1,0 +1,47 @@
+name: Deploy to cloud.gov
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudgov-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test -- src/lib/database-runtime.test.ts src/lib/work-modes.test.ts src/lib/password.test.ts src/lib/impersonation.test.ts
+      - name: Build standalone app
+        run: npm run build
+        env:
+          CI: "false"
+      - name: Install Cloud Foundry CLI
+        run: |
+          curl -fL --retry 3 "https://packages.cloudfoundry.org/stable?release=linux64-binary&version=8.19.0&source=github-rel" -o "$RUNNER_TEMP/cf-cli.tgz"
+          tar -xzf "$RUNNER_TEMP/cf-cli.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/cf8" version
+      - name: Deploy existing app
+        env:
+          CF_USERNAME: ${{ secrets.CF_USERNAME }}
+          CF_PASSWORD: ${{ secrets.CF_PASSWORD }}
+        run: |
+          : "${CF_USERNAME:?Set CF_USERNAME in the GitHub production environment}"
+          : "${CF_PASSWORD:?Set CF_PASSWORD in the GitHub production environment}"
+          cf8 api https://api.fr.cloud.gov
+          cf8 auth "$CF_USERNAME" "$CF_PASSWORD"
+          cf8 target -o epa-prototyping -s admin-training
+          cf8 push epa-business-platform --no-manifest -p .

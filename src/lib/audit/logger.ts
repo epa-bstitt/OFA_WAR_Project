@@ -4,6 +4,9 @@
  */
 
 import { prisma } from "@/lib/db";
+import { cookies } from "next/headers";
+import { auth } from "@/lib/auth";
+import { IMPERSONATION_COOKIE } from "@/lib/impersonation";
 import { maskPII, type PIIData } from "./pii";
 
 // Audit event types
@@ -12,6 +15,8 @@ export type AuditAction =
   | "USER_SIGNOUT"
   | "USER_CREATED"
   | "USER_ROLE_CHANGED"
+  | "USER_IMPERSONATION_STARTED"
+  | "USER_IMPERSONATION_ENDED"
   | "USER_DISABLED"
   | "USER_ENABLED"
   | "USER_ASSIGNED_TO_PROJECT"
@@ -73,6 +78,20 @@ function serializeMetadata(metadata?: Record<string, unknown>): string | null {
   }
 }
 
+async function auditActor(userId: string | null) {
+  if (!userId) return null;
+  try {
+    if (!cookies().has(IMPERSONATION_COOKIE)) return null;
+    const session = await auth();
+    if (session?.user?.id === userId && session.user.impersonatedBy) {
+      return session.user.impersonatedBy.id;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /**
  * Log an audit event
  * This is the ONLY way to create audit log entries
@@ -80,9 +99,13 @@ function serializeMetadata(metadata?: Record<string, unknown>): string | null {
  */
 export async function logAuditEvent(event: AuditEvent): Promise<void> {
   try {
+    const originalActorId = await auditActor(event.userId);
     // Mask PII in metadata
-    const sanitizedMetadata = event.metadata
-      ? maskPII(event.metadata as PIIData)
+    const metadata = originalActorId
+      ? { ...event.metadata, impersonatedUserId: event.userId }
+      : event.metadata;
+    const sanitizedMetadata = metadata
+      ? maskPII(metadata as PIIData)
       : null;
 
     // Sanitize user agent (may contain PII)
@@ -94,7 +117,7 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
     await prisma.auditLog.create({
       data: {
         action: event.action,
-        userId: event.userId,
+        userId: originalActorId ?? event.userId,
         resourceType: event.resourceType,
         resourceId: event.resourceId,
         metadata: serializeMetadata(sanitizedMetadata as Record<string, unknown>),
@@ -124,13 +147,16 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
  */
 export async function logAuditEvents(events: AuditEvent[]): Promise<void> {
   try {
+    const originalActorId = await auditActor(events[0]?.userId ?? null);
     const sanitizedEvents = events.map((event) => ({
       action: event.action,
-      userId: event.userId,
+      userId: originalActorId && event.userId === events[0]?.userId ? originalActorId : event.userId,
       resourceType: event.resourceType,
       resourceId: event.resourceId,
       metadata: serializeMetadata(
-        event.metadata ? (maskPII(event.metadata as PIIData) as Record<string, unknown>) : undefined
+        event.metadata || originalActorId
+          ? (maskPII({ ...event.metadata, ...(originalActorId && event.userId === events[0]?.userId ? { impersonatedUserId: event.userId } : {}) } as PIIData) as Record<string, unknown>)
+          : undefined
       ),
       ipAddress: event.ipAddress,
       userAgent: event.userAgent ? sanitizeUserAgent(event.userAgent) : null,

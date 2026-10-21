@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 
 const ROLE_HIERARCHY: Record<string, number> = {
   ADMINISTRATOR: 4,
@@ -39,7 +40,7 @@ export async function batchApprove(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -162,7 +163,7 @@ export async function batchReject(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 

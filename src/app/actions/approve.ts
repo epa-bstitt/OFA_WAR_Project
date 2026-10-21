@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
 import { getISOWeek, getISOWeekYear, getWeekRange } from "@/lib/date-utils";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 
 // Manual type definitions to avoid Prisma import issues
 type Submission = {
@@ -90,7 +91,7 @@ export async function getInReviewSubmissions(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -195,7 +196,7 @@ export async function getApprovalStats(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -303,7 +304,7 @@ export async function approveSubmission(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -389,7 +390,7 @@ export async function rejectSubmission(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -481,7 +482,7 @@ export async function exportSubmissionsToCSV(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 

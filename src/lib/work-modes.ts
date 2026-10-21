@@ -27,7 +27,7 @@ const LANDING_PATHS: Record<Role, string> = {
 };
 
 export function getAllowedWorkModes(role: Role, userId?: string | null, email?: string | null): Role[] {
-  if (isJakeBejaUser(userId, email) || isBrianStittUser(userId, email)) {
+  if (hasThreeModeAccess(userId, email)) {
     return ["CONTRIBUTOR", "AGGREGATOR", "PROGRAM_OVERSEER"];
   }
 
@@ -42,8 +42,12 @@ export function isBrianStittUser(userId?: string | null, email?: string | null):
   return email?.toLowerCase() === BRIAN_STITT_EMAIL || false;
 }
 
+export function hasThreeModeAccess(userId?: string | null, email?: string | null): boolean {
+  return isJakeBejaUser(userId, email) || isBrianStittUser(userId, email);
+}
+
 export function getDefaultWorkMode(role: Role, userId?: string | null, email?: string | null): Role {
-  if (isJakeBejaUser(userId, email) || isBrianStittUser(userId, email)) {
+  if (hasThreeModeAccess(userId, email)) {
     return "CONTRIBUTOR";
   }
 

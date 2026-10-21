@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, hasMinimumRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getCurrentSubmissionPeriod } from "@/lib/submission-periods";
-import { isJakeBejaUser } from "@/lib/work-modes";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 import {
   AlignmentType,
   BorderStyle,
@@ -293,7 +293,7 @@ export async function GET(request: NextRequest) {
 
   const canExport =
     hasMinimumRole(session.user.role, "PROGRAM_OVERSEER") ||
-    isJakeBejaUser(session.user.id, session.user.email);
+    hasThreeModeAccess(session.user.id, session.user.email);
   if (!canExport) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

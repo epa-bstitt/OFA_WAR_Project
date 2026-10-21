@@ -11,6 +11,7 @@ declare module "next-auth" {
       mustChangePassword: boolean;
       sessionVersion: number;
       isActive: boolean;
+      impersonatedBy?: { id: string; name: string | null; email: string | null };
     };
   }
 

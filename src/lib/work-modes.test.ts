@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getAllowedWorkModes,
   getDefaultWorkMode,
+  hasThreeModeAccess,
   getValidatedWorkMode,
   getWorkModeLandingPath,
 } from "./work-modes";
@@ -31,6 +32,12 @@ describe("work modes", () => {
     expect(getValidatedWorkMode("CONTRIBUTOR", "PROGRAM_OVERSEER", undefined, "stitt.brian@epa.gov")).toBe(
       "PROGRAM_OVERSEER"
     );
+  });
+
+  it("grants three-mode access only to Jake and Brian", () => {
+    expect(hasThreeModeAccess(undefined, "BEJA.JAKE@EPA.GOV")).toBe(true);
+    expect(hasThreeModeAccess(undefined, "Stitt.Brian@epa.gov")).toBe(true);
+    expect(hasThreeModeAccess(undefined, "someone.else@epa.gov")).toBe(false);
   });
 
   it("allows program overseers to use aggregator and overseer modes", () => {

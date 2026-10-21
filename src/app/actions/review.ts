@@ -8,10 +8,10 @@ import { getCurrentSubmissionPeriod, getSubmissionPeriodsFromJanuary } from "@/l
 // import { isMockModeEnabled } from "@/lib/admin/mock-mode-server";
 import { logWorkflowEvent } from "@/lib/audit/logger";
 import { ROLE_HIERARCHY } from "@/config/navigation";
-import { isJakeBejaUser } from "@/lib/work-modes";
+import { isBrianStittUser, isJakeBejaUser } from "@/lib/work-modes";
 
 function hasAggregatorAccess(user: { id?: string | null; email?: string | null; role: string }): boolean {
-  return isJakeBejaUser(user.id, user.email) ||
+  return isJakeBejaUser(user.id, user.email) || isBrianStittUser(user.id, user.email) ||
     (ROLE_HIERARCHY[user.role as keyof typeof ROLE_HIERARCHY] ?? 0) >= ROLE_HIERARCHY.AGGREGATOR;
 }
 

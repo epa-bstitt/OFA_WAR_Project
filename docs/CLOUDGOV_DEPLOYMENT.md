@@ -167,6 +167,15 @@ npm run db:verify:cloudgov
 
 ## Step 5: Deploy Application
 
+### Automatic deployments from GitHub
+
+The workflow in `.github/workflows/deploy-cloudgov.yml` builds and deploys the existing `epa-business-platform` app on each push to `main`. It can also be started manually from the GitHub Actions tab. In the GitHub repository, create a `production` environment and add these environment secrets:
+
+- `CF_USERNAME`: a dedicated cloud.gov deployer/service account with access to the `epa-prototyping` org and `admin-training` space.
+- `CF_PASSWORD`: that account's password, stored only as a GitHub secret. Do not use an interactive SSO/passcode account for CI.
+
+Until both secrets are configured, the workflow builds but cannot authenticate to deploy. The workflow pins Node.js 22 and CF CLI 8.19.0, runs focused tests, builds a Next.js standalone bundle, and uses `cf8 push --no-manifest` to preserve the app's existing route, environment variables, and database binding. It does **not** run Prisma migrations, bootstrap users, or upload the local SQLite database; data changes require a separate reviewed operation. The build sets `CI=false` for the Next.js step because this repository currently has unrelated strict TypeScript errors; this matches the existing production build behavior and should be removed after those errors are fixed. Configure environment protection rules if production changes need review before deployment.
+
 ### 5.1 Initial Deployment
 
 ```bash

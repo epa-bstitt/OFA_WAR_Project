@@ -15,7 +15,7 @@ import { hasMinimumRoleLevel } from "@/lib/auth-helpers";
 import { auth } from "@/lib/auth";
 import { getContractsOutlookFromDb } from "@/lib/contracts-db";
 import { getCurrentSubmissionPeriod, getSubmissionPeriodsFromJanuary } from "@/lib/submission-periods";
-import { isJakeBejaUser } from "@/lib/work-modes";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 
 export const metadata: Metadata = {
   title: "WAR Review",
@@ -43,7 +43,7 @@ export default async function ApprovePage({ searchParams }: ApprovePageProps) {
     redirect("/unauthorized");
   }
 
-  const isProgramOverseer = session.user.role === "PROGRAM_OVERSEER" || isJakeBejaUser(session.user.id, session.user.email);
+  const isProgramOverseer = session.user.role === "PROGRAM_OVERSEER" || hasThreeModeAccess(session.user.id, session.user.email);
   const isListView = isProgramOverseer && searchParams?.view === "list";
 
   // Fetch submissions needed for pending, updated, and approved buckets.

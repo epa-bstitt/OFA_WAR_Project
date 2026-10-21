@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { logAuditEvent, logAuditEvents } from "@/lib/audit/logger";
 import { getStoredSettings, setStoredSettings } from "@/app/api/admin/settings/store";
 import { buildContributorEmail, normalizeContributorName } from "@/lib/contributor-profile";
-import { isJakeBejaUser } from "@/lib/work-modes";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 import {
   type AggregatorAccessSettings,
   type ContributorAccessSettings,
@@ -30,7 +30,7 @@ async function requireOverseerAccess() {
   const session = await auth();
   if (
     !session?.user?.id ||
-    (!hasOverseerAccess(session.user.role) && !isJakeBejaUser(session.user.id, session.user.email))
+    (!hasOverseerAccess(session.user.role) && !hasThreeModeAccess(session.user.id, session.user.email))
   ) {
     throw new Error("Insufficient permissions");
   }

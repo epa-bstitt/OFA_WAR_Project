@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { createPage, formatWARContent, isGraphConfigured } from "@/lib/graph/onenote";
 import { withRetry, graphRetryOptions } from "@/lib/graph/retry";
 import { getISOWeek, getISOWeekYear, getWeekRange } from "@/lib/date-utils";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 
 const ROLE_HIERARCHY: Record<string, number> = {
   ADMINISTRATOR: 4,
@@ -46,7 +47,7 @@ export async function publishToOneNote(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -247,7 +248,7 @@ export async function getApprovedSubmissions(
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 
@@ -339,7 +340,7 @@ export async function getOneNoteSections(): Promise<
     const userLevel = ROLE_HIERARCHY[userRole] || 0;
     const minLevel = ROLE_HIERARCHY.PROGRAM_OVERSEER;
 
-    if (userLevel < minLevel) {
+    if (userLevel < minLevel && !hasThreeModeAccess(session.user.id, session.user.email)) {
       return { success: false, error: "Insufficient permissions" };
     }
 

@@ -6,7 +6,7 @@ import { getOverseerSettingsData } from "@/app/actions/overseer/settings";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { defaultOverseerSettings } from "@/lib/overseer-settings";
-import { isJakeBejaUser } from "@/lib/work-modes";
+import { hasThreeModeAccess } from "@/lib/work-modes";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -23,7 +23,7 @@ export default async function SettingsPage() {
 
   const allowedRoles = ["PROGRAM_OVERSEER", "ADMINISTRATOR"];
   const canAccessSettings =
-    allowedRoles.includes(session.user.role as string) || isJakeBejaUser(session.user.id, session.user.email);
+    allowedRoles.includes(session.user.role as string) || hasThreeModeAccess(session.user.id, session.user.email);
 
   if (!canAccessSettings) {
     redirect("/dashboard");

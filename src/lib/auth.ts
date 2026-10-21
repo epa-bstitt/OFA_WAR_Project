@@ -1,9 +1,11 @@
 import NextAuth from "next-auth";
 import AzureADB2C from "next-auth/providers/azure-ad-b2c";
 import Credentials from "next-auth/providers/credentials";
+import { cookies } from "next/headers";
 import { resolveSsoUser } from "@/lib/auth-users";
 import { prisma } from "@/lib/db";
 import { isEpaEmail, normalizeLoginEmail, verifyPassword } from "@/lib/password";
+import { IMPERSONATION_COOKIE, readImpersonationToken } from "@/lib/impersonation";
 
 const authSecret =
   process.env.AUTH_SECRET ??
@@ -180,6 +182,30 @@ const {
         session.user.mustChangePassword = Boolean(token.mustChangePassword);
         session.user.sessionVersion = Number(token.sessionVersion ?? 0);
         session.user.isActive = Boolean(token.isActive);
+
+        if (session.user.isActive && session.user.role === "ADMINISTRATOR") {
+          const targetId = readImpersonationToken(cookies().get(IMPERSONATION_COOKIE)?.value, session.user.id);
+          if (targetId) {
+            const [admin, target] = await Promise.all([
+              prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } }),
+              prisma.user.findUnique({ where: { id: targetId }, select: {
+                id: true, name: true, email: true, role: true, isActive: true,
+                azureAdId: true, mustChangePassword: true, sessionVersion: true,
+              } }),
+            ]);
+            if (admin && target?.isActive && target.role !== "ADMINISTRATOR") {
+              session.user.impersonatedBy = { id: session.user.id, name: admin.name, email: admin.email };
+              session.user.id = target.id;
+              session.user.name = target.name;
+              session.user.email = target.email;
+              session.user.image = null;
+              session.user.role = target.role;
+              session.user.azureAdId = target.azureAdId;
+              session.user.mustChangePassword = false;
+              session.user.sessionVersion = target.sessionVersion;
+            }
+          }
+        }
       }
       return session;
     },
