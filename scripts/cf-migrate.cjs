@@ -26,4 +26,11 @@ function run(script, args) {
 }
 
 run(path.join("node_modules", "prisma", "build", "index.js"), ["migrate", "deploy"]);
-run(path.join("scripts", "migrate-sqlite-to-postgres.mjs"), process.argv.slice(2));
+
+const args = process.argv.slice(2);
+const migrateOnly = args.includes("--migrate-only");
+const dataMigrationArgs = args.filter((argument) => argument !== "--migrate-only");
+
+if (!migrateOnly) {
+  run(path.join("scripts", "migrate-sqlite-to-postgres.mjs"), dataMigrationArgs);
+}

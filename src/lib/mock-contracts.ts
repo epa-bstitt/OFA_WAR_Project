@@ -5,6 +5,7 @@ export interface MockContractSubmission {
   submittedAt: string;
   status: "APPROVED" | "IN_REVIEW" | "DRAFT";
   summary: string;
+  severity?: "NORMAL" | "RISK" | "CRITICAL" | null;
 }
 
 export interface ActiveContractDetails {

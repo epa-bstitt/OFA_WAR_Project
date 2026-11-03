@@ -46,6 +46,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const summary = String(body?.summary ?? "").trim();
     const submissionId = typeof body?.submissionId === "string" ? body.submissionId : null;
+    const severity = body?.severity;
+
+    if (severity !== undefined && !["NORMAL", "RISK", "CRITICAL"].includes(severity)) {
+      return NextResponse.json({ error: "Severity must be NORMAL, RISK, or CRITICAL." }, { status: 400 });
+    }
 
     if (!summary) {
       return NextResponse.json({ error: "Summary is required." }, { status: 400 });
@@ -75,6 +80,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       contractId: params.id,
       userId: session.user.id,
       summary,
+      severity: severity ?? null,
       submissionId,
     });
 

@@ -23,7 +23,6 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
   ],
   AGGREGATOR: [
     { label: "Dashboard", href: "/review", icon: Inbox },
-    { label: "Prompts", href: "/prompts", icon: Settings },
   ],
   PROGRAM_OVERSEER: [
     { label: "WAR Review", href: "/approve", icon: CheckCircle },

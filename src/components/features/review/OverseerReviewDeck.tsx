@@ -447,6 +447,18 @@ export function OverseerReviewDeck({
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Contract</p>
                     <CardTitle className="text-xl text-slate-900">{current.contractName}</CardTitle>
                     <Badge variant="secondary" className="mt-2">{current.contractCategory}</Badge>
+                    {current.severity && (
+                      <Badge
+                        className={cn(
+                          "mt-2",
+                          current.severity === "CRITICAL" && "bg-rose-700 text-white hover:bg-rose-700",
+                          current.severity === "RISK" && "bg-amber-600 text-white hover:bg-amber-600",
+                          current.severity === "NORMAL" && "bg-emerald-700 text-white hover:bg-emerald-700"
+                        )}
+                      >
+                        {current.severity}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>

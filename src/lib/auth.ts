@@ -4,8 +4,11 @@ import Credentials from "next-auth/providers/credentials";
 import { cookies } from "next/headers";
 import { resolveSsoUser } from "@/lib/auth-users";
 import { prisma } from "@/lib/db";
-import { isEpaEmail, normalizeLoginEmail, verifyPassword } from "@/lib/password";
+import { getContributorNameFromEmail, isContributorEmail } from "@/lib/contributor-profile";
+import { hashPassword, isEpaEmail, normalizeLoginEmail, verifyPassword } from "@/lib/password";
 import { IMPERSONATION_COOKIE, readImpersonationToken } from "@/lib/impersonation";
+
+const CONTRIBUTOR_TEMPORARY_PASSWORD = "EPA123";
 
 const authSecret =
   process.env.AUTH_SECRET ??
@@ -79,14 +82,84 @@ const {
           return null;
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        let user = await prisma.user.findUnique({ where: { email } });
+        let createdUser = false;
 
-        if (!user?.isActive || !user.passwordHash) {
+        if (!user) {
+          if (
+            !isContributorEmail(email) ||
+            password !== CONTRIBUTOR_TEMPORARY_PASSWORD
+          ) {
+            return null;
+          }
+
+          try {
+            user = await prisma.user.create({
+              data: {
+                email,
+                name: getContributorNameFromEmail(email),
+                role: "CONTRIBUTOR",
+                isActive: true,
+                passwordHash: await hashPassword(CONTRIBUTOR_TEMPORARY_PASSWORD),
+                mustChangePassword: true,
+              },
+            });
+            createdUser = true;
+          } catch (error) {
+            const existingUser = await prisma.user.findUnique({ where: { email } });
+            if (!existingUser) {
+              throw error;
+            }
+            user = existingUser;
+          }
+        }
+
+        if (!user.isActive) {
           return null;
         }
 
-        const passwordMatches = await verifyPassword(password, user.passwordHash);
-        if (!passwordMatches) return null;
+        if (!user.passwordHash) {
+          if (user.role !== "CONTRIBUTOR" || password !== CONTRIBUTOR_TEMPORARY_PASSWORD) {
+            return null;
+          }
+
+          const passwordHash = await hashPassword(CONTRIBUTOR_TEMPORARY_PASSWORD);
+          const initialized = await prisma.user.updateMany({
+            where: { id: user.id, role: "CONTRIBUTOR", isActive: true, passwordHash: null },
+            data: {
+              passwordHash,
+              mustChangePassword: true,
+              sessionVersion: { increment: 1 },
+            },
+          });
+
+          if (initialized.count === 0) {
+            return null;
+          }
+
+          user = await prisma.user.findUnique({ where: { id: user.id } });
+          if (!user?.isActive || !user.passwordHash) {
+            return null;
+          }
+        } else if (!(await verifyPassword(password, user.passwordHash))) {
+          return null;
+        }
+
+        if (createdUser) {
+          const { logAuditEvent } = await import("@/lib/audit/logger");
+          await logAuditEvent({
+            action: "USER_CREATED",
+            userId: user.id,
+            resourceType: "user",
+            resourceId: user.id,
+            metadata: {
+              targetUserEmail: user.email,
+              targetUserName: user.name,
+              role: "CONTRIBUTOR",
+              source: "FIRST_LOGIN_BOOTSTRAP",
+            },
+          });
+        }
 
         return {
           id: user.id,

@@ -120,6 +120,7 @@ model Submission {
   contractId    String?
   weekOf        DateTime
   rawText       String
+  severity      String?
   terseText     String?
   terseVersion  String?
   aiConfidence  Float?

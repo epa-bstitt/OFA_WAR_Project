@@ -176,6 +176,8 @@ The workflow in `.github/workflows/deploy-cloudgov.yml` builds and deploys the e
 
 Until both secrets are configured, the workflow builds but cannot authenticate to deploy. The workflow pins Node.js 22 and CF CLI 8.19.0, runs focused tests, builds a Next.js standalone bundle, and uses `cf8 push --no-manifest` to preserve the app's existing route, environment variables, and database binding. It does **not** run Prisma migrations, bootstrap users, or upload the local SQLite database; data changes require a separate reviewed operation. The build sets `CI=false` for the Next.js step because this repository currently has unrelated strict TypeScript errors; this matches the existing production build behavior and should be removed after those errors are fixed. Configure environment protection rules if production changes need review before deployment.
 
+The workflow applies checked-in Prisma migrations to the bound `epa-db` service before pushing the new application version. It uses migration-only mode and does **not** transfer or upload the local SQLite database. Data imports, user bootstrapping, and other data changes still require a separate reviewed operation. The build sets `CI=false` for the Next.js step because this repository currently has unrelated strict TypeScript errors; this matches the existing production build behavior and should be removed after those errors are fixed. Configure environment protection rules if production changes need review before deployment.
+
 ### 5.1 Initial Deployment
 
 ```bash

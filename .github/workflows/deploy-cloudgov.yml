@@ -23,7 +23,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm test -- src/lib/database-runtime.test.ts src/lib/work-modes.test.ts src/lib/password.test.ts src/lib/impersonation.test.ts
+      - run: npm test -- src/lib/database-runtime.test.ts src/lib/work-modes.test.ts src/lib/password.test.ts src/lib/impersonation.test.ts src/lib/contributor-profile.test.ts
       - name: Build standalone app
         run: npm run build
         env:
@@ -34,6 +34,8 @@ jobs:
           tar -xzf "$RUNNER_TEMP/cf-cli.tgz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/cf8" version
+      - name: Install Cloud.gov conduit plugin
+        run: cf8 install-plugin conduit -r CF-Community -f
       - name: Deploy existing app
         env:
           CF_USERNAME: ${{ secrets.CF_USERNAME }}
@@ -44,4 +46,5 @@ jobs:
           cf8 api https://api.fr.cloud.gov
           cf8 auth "$CF_USERNAME" "$CF_PASSWORD"
           cf8 target -o epa-prototyping -s admin-training
+          cf8 conduit epa-db -- node scripts/cf-migrate.cjs --migrate-only
           cf8 push epa-business-platform --no-manifest -p .

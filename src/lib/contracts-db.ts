@@ -162,6 +162,7 @@ function mapSubmissionToWarEntry(submission: {
   createdAt: Date;
   rawText: string;
   status: string;
+  severity?: string | null;
 }): MockContractSubmission {
   const period = getCurrentSubmissionPeriod(submission.weekOf);
 
@@ -172,6 +173,7 @@ function mapSubmissionToWarEntry(submission: {
     submittedAt: toIsoDate(submission.createdAt),
     status: submission.status === "APPROVED" ? "APPROVED" : "IN_REVIEW",
     summary: submission.rawText,
+    severity: submission.severity as MockContractSubmission["severity"],
   };
 }
 
@@ -602,6 +604,7 @@ export async function getWarEntriesForContractFromDb(contractId: string): Promis
       updatedAt: true,
       rawText: true,
       status: true,
+      severity: true,
     },
   });
 
@@ -612,6 +615,7 @@ export async function upsertWarSubmissionForContract(params: {
   contractId: string;
   userId: string;
   summary: string;
+  severity: "NORMAL" | "RISK" | "CRITICAL" | null;
   submissionId?: string | null;
 }): Promise<{ entry: MockContractSubmission; submissionId: string }> {
   const contractProject = await prisma.project.findUnique({
@@ -674,6 +678,7 @@ export async function upsertWarSubmissionForContract(params: {
         where: { id: submission.id },
         data: {
           rawText: params.summary,
+          severity: params.severity,
           status: "SUBMITTED",
           weekOf,
           updatedAt: now,
@@ -724,6 +729,7 @@ export async function upsertWarSubmissionForContract(params: {
         where: { id: submission.id },
         data: {
           rawText: params.summary,
+          severity: params.severity,
           status: "SUBMITTED",
           weekOf,
           updatedAt: now,
@@ -746,6 +752,7 @@ export async function upsertWarSubmissionForContract(params: {
         projectId: params.contractId,
         weekOf,
         rawText: params.summary,
+        severity: params.severity,
         status: "SUBMITTED",
         isAiGenerated: false,
       },

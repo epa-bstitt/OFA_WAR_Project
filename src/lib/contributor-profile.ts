@@ -1,4 +1,16 @@
 const EMAIL_DOMAIN = "epa.gov";
+const CONTRIBUTOR_EMAIL_PATTERN = /^[a-z0-9]+(?:['-][a-z0-9]+)*\.[a-z0-9]+(?:['-][a-z0-9]+)*@epa\.gov$/i;
+
+export function isContributorEmail(value: string) {
+  return CONTRIBUTOR_EMAIL_PATTERN.test(value.trim());
+}
+
+export function getContributorNameFromEmail(value: string) {
+  const [lastName, firstName] = value.trim().toLowerCase().split("@")[0].split(".");
+  const titleCase = (part: string) => part.replace(/(^|[-'])[a-z]/g, (letter) => letter.toUpperCase());
+
+  return `${titleCase(firstName)} ${titleCase(lastName)}`;
+}
 
 function normalizeToken(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "").trim();

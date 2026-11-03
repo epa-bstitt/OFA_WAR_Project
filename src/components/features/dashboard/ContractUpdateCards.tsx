@@ -460,7 +460,12 @@ export function ContractUpdateCards({
       return false;
     }
 
-    return submissionWindowOpen || schedulingOverrideActive || Boolean(draft.reopenedAfterDeadline);
+    return (
+      submissionWindowOpen ||
+      schedulingOverrideActive ||
+      Boolean(draft.reopenedAfterDeadline) ||
+      (userRole === "contributor" && Boolean(draft.reviewSubmissionId))
+    );
   }
 
   const initialDrafts = useMemo<Record<string, DraftState>>(
@@ -486,8 +491,8 @@ export function ContractUpdateCards({
             contract.id,
             {
               submissionMode: "SIMPLE",
-              simpleText: "",
-              simpleStatus: "NORMAL",
+              simpleText: currentCycleEntry?.summary ?? "",
+              simpleStatus: currentCycleEntry?.severity ?? "NORMAL",
               lineItems: [createLineItem()],
               noUpdate: false,
               submitted: Boolean(currentCycleEntry),
@@ -504,13 +509,17 @@ export function ContractUpdateCards({
       visibleContracts,
       currentPeriod.start,
       currentPeriod.end,
+      currentPeriod.id,
       schedulingOverrideActive,
       submissionWindowOpen,
     ]
   );
   const [drafts, setDrafts] = useState<Record<string, DraftState>>(initialDrafts);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
-  const [isEnhancedModeEnabled, setIsEnhancedModeEnabled] = useState(enhancedEditorEnabled);
+  const isContributor = userRole === "contributor";
+  const [isEnhancedModeEnabled, setIsEnhancedModeEnabled] = useState(
+    !isContributor && enhancedEditorEnabled
+  );
   const cardDensity = "detailed";
   const [walkthroughVariant, setWalkthroughVariant] = useState<WalkthroughVariant | null>(null);
   const [selectedActiveContractId, setSelectedActiveContractId] = useState<string | null>(null);
@@ -711,7 +720,7 @@ export function ContractUpdateCards({
     : simpleWalkthroughSteps;
 
   useEffect(() => {
-    if (!firstContractId) {
+    if (!firstContractId || isContributor) {
       return;
     }
 
@@ -726,7 +735,7 @@ export function ContractUpdateCards({
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [firstContractId]);
+  }, [firstContractId, isContributor]);
 
   function handleWalkthroughClose(rememberDismissal: boolean) {
     setWalkthroughVariant(null);
@@ -934,6 +943,7 @@ export function ContractUpdateCards({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             summary,
+            severity: getDraftSeverity(currentDraft),
             status: "IN_REVIEW",
             submissionId: currentDraft.reviewSubmissionId,
             historyEntryId: currentDraft.historyEntryId,
@@ -1510,38 +1520,42 @@ export function ContractUpdateCards({
 
   return (
     <TooltipProvider delayDuration={120}>
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Enhanced Submission Workflow</p>
-            <p className="text-xs text-slate-500">
-              Toggle structured sections, owner and due-date tracking, and carry-forward support.
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-            <Button type="button" variant="outline" size="sm" onClick={launchSimpleWalkthrough}>
-              Simple walkthrough
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={launchAdvancedWalkthrough}>
-              Advanced walkthrough
-            </Button>
-            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-              <span>{isEnhancedModeEnabled ? "Enhanced mode" : "Simple mode"}</span>
-              <Switch
-                checked={isEnhancedModeEnabled}
-                onCheckedChange={setIsEnhancedModeEnabled}
-                aria-label="Toggle enhanced submission workflow"
-                disabled={!submissionsEnabled}
-              />
-            </label>
-          </div>
+      {(!isContributor || !submissionsEnabled) && (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          {!isContributor && (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Enhanced Submission Workflow</p>
+                <p className="text-xs text-slate-500">
+                  Toggle structured sections, owner and due-date tracking, and carry-forward support.
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                <Button type="button" variant="outline" size="sm" onClick={launchSimpleWalkthrough}>
+                  Simple walkthrough
+                </Button>
+                <Button type="button" variant="secondary" size="sm" onClick={launchAdvancedWalkthrough}>
+                  Advanced walkthrough
+                </Button>
+                <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                  <span>{isEnhancedModeEnabled ? "Enhanced mode" : "Simple mode"}</span>
+                  <Switch
+                    checked={isEnhancedModeEnabled}
+                    onCheckedChange={setIsEnhancedModeEnabled}
+                    aria-label="Toggle enhanced submission workflow"
+                    disabled={!submissionsEnabled}
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+          {!submissionsEnabled && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Contributor submissions are currently turned off by the program overseer. You can still review card history.
+            </div>
+          )}
         </div>
-        {!submissionsEnabled && (
-          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Contributor submissions are currently turned off by the program overseer. You can still review card history.
-          </div>
-        )}
-      </div>
+      )}
 
       <CardGrid columns={2} gap="lg">
         {visibleContracts.map((contract, index) => {
@@ -1680,7 +1694,9 @@ export function ContractUpdateCards({
                       <span className="text-xs font-medium text-slate-500">Marked as no update</span>
                     )}
                   </div>
-                  {isEnhancedModeEnabled ? (
+                  {isContributor ? (
+                    renderSimpleSubmission(contract, draft, isFirstCard)
+                  ) : isEnhancedModeEnabled ? (
                     <Tabs
                       value={draft.submissionMode}
                       onValueChange={(value) => {
@@ -1782,7 +1798,7 @@ export function ContractUpdateCards({
                         ? draft.submissionMode === "SIMPLE"
                           ? "Simple mode keeps the submission lightweight with a single text field and severity tag."
                           : "Detailed mode tracks category, owner, due date, carry-forward items, and action flags."
-                        : "Draft changes are for demo only."}
+                        : "Simple mode keeps the submission lightweight with a single text field and severity tag."}
                   </p>
                 </div>
               </CardContent>
@@ -1834,11 +1850,13 @@ export function ContractUpdateCards({
         )}
       </Dialog>
 
-      <CardWalkthrough
-        steps={activeWalkthroughSteps}
-        open={isWalkthroughOpen}
-        onClose={handleWalkthroughClose}
-      />
+      {!isContributor && (
+        <CardWalkthrough
+          steps={activeWalkthroughSteps}
+          open={isWalkthroughOpen}
+          onClose={handleWalkthroughClose}
+        />
+      )}
 
       <Dialog
         open={Boolean(selectedActiveContractId)}

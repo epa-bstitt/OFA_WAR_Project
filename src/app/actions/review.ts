@@ -31,6 +31,7 @@ export interface Submission {
   contractId?: string | null;
   weekOf: Date;
   rawText: string;
+  severity?: string | null;
   terseVersion?: string | null;
   status: string;
   isAiGenerated: boolean;
