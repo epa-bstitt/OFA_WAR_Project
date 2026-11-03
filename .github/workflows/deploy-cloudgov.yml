@@ -23,7 +23,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm test -- src/lib/database-runtime.test.ts src/lib/work-modes.test.ts src/lib/password.test.ts src/lib/impersonation.test.ts src/lib/contributor-profile.test.ts
+      - run: npm test -- src/lib/database-runtime.test.ts src/lib/work-modes.test.ts src/lib/password.test.ts src/lib/impersonation.test.ts src/lib/contributor-profile.test.ts src/lib/cf-launch.test.ts
       - name: Build standalone app
         run: npm run build
         env:
