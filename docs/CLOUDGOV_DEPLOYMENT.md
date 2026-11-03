@@ -156,13 +156,20 @@ node scripts\migrate-sqlite-to-postgres.mjs --inventory-only
 
 ### 4.2 Apply and Verify the Migration
 
-Wait until `cf8 service epa-db` reports `create succeeded`, then install conduit and
-run the migration. The destination must be empty; the transfer aborts otherwise.
+The `epa-db` service uses the `aws-rds` broker, which is not supported by the
+Cloud Foundry conduit plugin. Do not use conduit to access this database. For
+schema-only deployments, the GitHub Actions workflow stages a temporary no-route
+task app, binds it to `epa-db`, runs `prisma migrate deploy`, waits for the task to
+succeed, and only then deploys the public app. This path does not copy data from the
+local SQLite database.
+
+For a full SQLite-to-PostgreSQL data transfer, use a separately reviewed and backed
+up migration operation. Do not replace or import production data as part of a normal
+application deployment.
 
 ```powershell
-cf8 install-plugin conduit -r CF-Community -f
-npm run db:migrate:cloudgov
-npm run db:verify:cloudgov
+# Confirm the managed database service is ready before deploying.
+cf8 service epa-db
 ```
 
 ## Step 5: Deploy Application
@@ -174,22 +181,14 @@ The workflow in `.github/workflows/deploy-cloudgov.yml` builds and deploys the e
 - `CF_USERNAME`: a dedicated cloud.gov deployer/service account with access to the `epa-prototyping` org and `admin-training` space.
 - `CF_PASSWORD`: that account's password, stored only as a GitHub secret. Do not use an interactive SSO/passcode account for CI.
 
-Until both secrets are configured, the workflow builds but cannot authenticate to deploy. The workflow pins Node.js 22 and CF CLI 8.19.0, runs focused tests, builds a Next.js standalone bundle, and uses `cf8 push --no-manifest` to preserve the app's existing route, environment variables, and database binding. It does **not** run Prisma migrations, bootstrap users, or upload the local SQLite database; data changes require a separate reviewed operation. The build sets `CI=false` for the Next.js step because this repository currently has unrelated strict TypeScript errors; this matches the existing production build behavior and should be removed after those errors are fixed. Configure environment protection rules if production changes need review before deployment.
-
-The workflow applies checked-in Prisma migrations to the bound `epa-db` service before pushing the new application version. It uses migration-only mode and does **not** transfer or upload the local SQLite database. Data imports, user bootstrapping, and other data changes still require a separate reviewed operation. The build sets `CI=false` for the Next.js step because this repository currently has unrelated strict TypeScript errors; this matches the existing production build behavior and should be removed after those errors are fixed. Configure environment protection rules if production changes need review before deployment.
+Until both secrets are configured, the workflow builds but cannot authenticate to deploy. The workflow pins Node.js 22 and CF CLI 8.19.0, runs focused tests, builds a Next.js standalone bundle, stages a temporary no-route task app with the current source, binds it to `epa-db`, and runs checked-in Prisma migrations through the bound `VCAP_SERVICES` credentials. It waits for the migration task to succeed before pushing the public app; migration failure prevents the app push. The temporary app is removed after the deployment job. This process does **not** transfer the local SQLite database, bootstrap users, or import data. The build sets `CI=false` for the Next.js step because this repository currently has unrelated strict TypeScript errors; this matches the existing production build behavior and should be removed after those errors are fixed. Configure environment protection rules if production changes need review before deployment.
 
 ### 5.1 Initial Deployment
 
-```bash
-# Push application (without starting)
-cf push --no-start
-
-# Run database migrations
-cf run-task epa-business-platform "npx prisma migrate deploy" --name migrate
-
-# Start application
-cf start epa-business-platform
-```
+For an initial manual deployment, use the same order as the GitHub workflow: stage a
+temporary task app with the Prisma CLI installed, bind `epa-db`, run and verify
+`prisma migrate deploy`, then push and start the public app. Do not run migrations
+through conduit for this `aws-rds` service.
 
 ### 5.2 Blue-Green Deployment (Zero Downtime)
 
@@ -278,8 +277,8 @@ cf configure-autoscaling epa-business-platform --min 2 --max 10 --cpu-threshold 
    - Verify Node.js version compatibility
 
 3. **Prisma Migration Errors**
-   - Connect directly to database to diagnose: `cf conduit epa-db -- psql`
-   - Check migration status: `npx prisma migrate status`
+  - Inspect the migration task output in the GitHub Actions run.
+  - Confirm the temporary task app had an active binding to `epa-db`.
 
 4. **Memory Issues**
    - Increase memory allocation: `cf scale epa-business-platform -m 4G`
@@ -319,15 +318,12 @@ cf events epa-business-platform
 
 1. **Update Buildpacks**: Automatic with each deployment
 2. **Security Patches**: Monitor Cloud.gov notifications
-3. **Database Maintenance**: Use `cf conduit` for database maintenance tasks
+3. **Database Maintenance**: Use Cloud.gov's supported RDS service controls for backups and maintenance. The conduit plugin cannot interpret this `aws-rds` service instance.
 
 ### Backup Strategy
 
 1. **RDS Automated Backups**: Enabled by default (retention: 7 days)
-2. **Manual Backups**: Create before major deployments
-   ```bash
-   cf conduit epa-db -- pg_dump -Fc > backup-$(date +%Y%m%d).dump
-   ```
+2. **Manual Backups**: Create and verify a Cloud.gov-supported RDS snapshot before major data operations.
 
 ## Support
 
@@ -340,18 +336,9 @@ cf events epa-business-platform
 ## Quick Reference Cheat Sheet
 
 ```bash
-# Full deployment workflow
-cf login -a api.fr.cloud.gov --sso
-cf target -o <org> -s <space>
-cf push --no-start
-cf run-task epa-business-platform "npx prisma migrate deploy" --name migrate
-cf start epa-business-platform
-cf logs epa-business-platform
-
-# Database operations
-cf conduit epa-db -- psql
-cf conduit epa-db -- pg_dump -Fc > backup.dump
-cf conduit epa-db -- pg_restore -d dbname < backup.dump
+# Deployment and migration status
+cf logs epa-business-platform --recent
+cf tasks epa-business-platform
 
 # Troubleshooting
 cf logs epa-business-platform --recent
